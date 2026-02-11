@@ -1,0 +1,141 @@
+Major Business Logic Abuse Categories
+
+🔴 1. Price Manipulation
+Attack Pattern
+Frontend sends:
+{
+   "productId": 101,
+   "price": 499
+}
+If backend trusts client price → attacker modifies:
+"price": 1
+Or manipulates:
+	• Discount field
+	• Tax field
+	• Shipping fee
+
+	“All pricing calculations must happen server-side. The client should only send product identifiers and quantity. The backend must re-fetch authoritative price from database or pricing service.”
+
+Follow-up Trick Question
+❓ “But what if pricing is cached on client for performance?”
+Correct answer:
+	“Client caching is fine for display, but pricing must be recalculated and validated during checkout using trusted backend services. Never trust client-provided financial parameters.”
+
+🔴 2. Coupon Abuse
+Attack Patterns
+	• Reusing single-use coupon multiple times
+	• Applying coupon to ineligible product
+	• Combining multiple coupons
+	• Race condition on coupon redemption
+	• Applying coupon after refund
+	• Using expired coupon via time manipulation
+
+Real Exploit Scenario
+Coupon has limit: 1 use per user.
+Attacker:
+	• Sends 20 parallel requests.
+	• All pass “not used yet” check.
+	• Coupon applied 20 times.
+Race condition.
+
+	“Coupon validation must be atomic. We should implement transactional checks or distributed locking to prevent race conditions. Additionally, coupon usage counters must be updated in the same transaction as order creation.”
+	“At scale, we should treat coupon abuse as fraud problem, not only technical validation. Behavioral monitoring can detect abnormal redemption patterns.”
+
+🔴 3. Cart Manipulation
+Attack:
+	• Change quantity to negative value
+	• Change quantity to 0
+	• Add product not available
+	• Modify inventory flag
+Example:
+"quantity": -5
+If system calculates:
+Total = price × quantity
+Could result in negative payable amount.
+
+	“Input validation must enforce logical constraints like quantity > 0 and within inventory limits. Additionally, server must re-validate inventory at checkout to prevent stale cart manipulation.”
+
+🔴 4. Race Conditions in Checkout (VERY IMPORTANT)
+	“How would you secure a checkout system?”
+Key risks:
+	• Double spend
+	• Duplicate order placement
+	• Payment replay
+	• Inventory overselling
+
+Example Attack
+User clicks “Pay” multiple times.
+If:
+	• Payment API processes twice
+	• Inventory deducted twice
+	• Refund logic flawed
+Financial loss.
+
+	“Checkout APIs must be idempotent. Each order request should carry an idempotency key. Backend must ensure that repeated requests with the same key do not create duplicate transactions.”
+	“Payment confirmation and inventory deduction should occur within a transactional boundary or via reliable message queue with exactly-once semantics.”
+
+🔴 5. Refund Abuse
+Attack patterns:
+	• Claim item not delivered
+	• Manipulate refund eligibility window
+	• Partial refund misuse
+	• Return item but keep product (switching product)
+Technical angle:
+	• Manipulating refund API
+	• Bypassing refund state machine
+
+	“Refund flows must enforce strict state transitions. The order lifecycle should be implemented as a state machine, and transitions must be validated server-side to prevent illegal state manipulation.”
+
+🔴 6. Gift Card Abuse
+Attack patterns:
+	• Brute-force gift card numbers
+	• Enumerating balance API
+	• Using partial balance multiple times
+	• Race condition draining
+
+Mitigation
+	• High entropy gift codes
+	• Rate limiting balance checks
+	• Velocity monitoring
+	• CAPTCHA after threshold
+	• Transactional balance deduction
+
+🔴 7. Inventory Scraping & Bots
+Attackers:
+	• Scrape inventory data
+	• Auto-buy limited stock (scalping)
+	• Abuse flash sales
+Mitigation:
+	• Bot detection
+	• Behavioral analytics
+	• Rate limiting
+	• Queue-based purchase system
+
+	“In large-scale e-commerce platforms, business logic security requires collaboration between product, engineering, and fraud teams. Not all abuse can be prevented purely via validation; some require anomaly detection and behavioral risk scoring.”
+
+4️⃣ Architecture-Level Controls
+	“How would you architect defenses?”
+1️⃣ Server-side authoritative calculations
+2️⃣ Strong state machines for order lifecycle
+3️⃣ Idempotency keys for financial APIs
+4️⃣ Distributed locking where necessary
+5️⃣ Fraud detection systems
+6️⃣ Rate limiting & bot detection
+7️⃣ Monitoring abnormal redemption or purchase patterns
+
+
+5️⃣ Trick Questions:
+❓ Can business logic vulnerabilities be detected by SAST?
+Correct answer:
+	“Most business logic flaws cannot be detected by static scanners because they depend on workflow manipulation rather than code-level injection patterns.”
+
+❓ Is rate limiting enough to stop coupon abuse?
+Correct answer:
+	“Rate limiting helps but does not prevent logical flaws such as race conditions or improper validation. Core validation must be implemented transactionally.”
+
+❓ How do you prioritize business logic vulnerabilities?
+Strong answer:
+	“I prioritize based on financial impact, exploitability, and abuse likelihood. In e-commerce, vulnerabilities affecting payments, refunds, or coupons receive highest priority.”
+
+
+“In e-commerce security, business logic protection is as important as preventing technical vulnerabilities. The key is enforcing server-side trust boundaries, atomic transactions, and monitoring abnormal financial behavior at scale.”
