@@ -1,0 +1,108 @@
+1️⃣ Explain Account Takeover and how you secure against it.
+“In an e-commerce system, account takeover is not just unauthorized login. It is a financial fraud vector. Once an attacker controls an account, they can manipulate wallet balance, stored cards, refunds, addresses, loyalty points, and coupon flows. 
+So I treat ATO as both an authentication and fraud problem.”
+
+2️⃣ How ATO Happens
+🔹 Credential Stuffing
+	• Attackers use breached credential dumps.
+	• Automated bots attempt login across accounts.
+	• They rotate IPs via botnets.
+	• They randomize headers to bypass simple rate limits.
+	• They distribute attempts across time to avoid lockouts.
+Important line:
+“Credential stuffing is low-and-slow now. It's no longer brute force in a single burst.”
+
+🔹 OTP Brute Force / MFA Abuse
+Common mistakes:
+	• 4-digit OTP with no rate limit.
+	• OTP valid for too long.
+	• No lockout after repeated failures.
+Even more advanced:
+	• MFA fatigue attack (spamming push notifications until user clicks approve).
+	• SIM swap attack targeting SMS-based OTP.
+
+🔹 Session Hijacking
+	• If XSS exists → token theft.
+	• If cookies lack HttpOnly → accessible via JS.
+	• If SameSite not configured → CSRF-like session abuse.
+	• If session ID predictable → session fixation.
+
+🔹 Password Reset Abuse
+	“Is password reset endpoint sensitive?”
+Answer:
+“Yes. It is one of the most attacked endpoints.
+If reset tokens are predictable, not expiring, or reusable, ATO becomes trivial.”
+	• Token entropy must be high.
+	• Single-use tokens.
+	• Short expiry.
+	• Invalidate after use.
+
+3️⃣ Why Basic Rate Limiting Is Not Enough
+“Traditional per-IP rate limiting fails because attackers distribute traffic across botnets. Modern attacks use residential proxies and legitimate user agents.”
+“Static CAPTCHA also fails because solving services exist.”
+
+4️⃣ Detection Engineering
+“I would design ATO detection using layered signals.”
+Layer 1: Authentication Signals
+	• Failed login spike
+	• Password spraying patterns (one password across many users)
+	• Login attempt entropy anomalies
+Layer 2: Session Risk Signals
+	• New device fingerprint
+	• New ASN / ISP
+	• Geo velocity anomaly
+	• Headless browser detection
+Layer 3: Post-login Behavior
+	• Immediate change of email/password
+	• Rapid checkout
+	• Adding new payment method
+	• Multiple refund requests
+“I would assign a dynamic risk score per session rather than binary allow/block.”
+
+5️⃣ Prevention Architecture (How You Design It)
+Authentication Hardening
+	• Strong password hashing (bcrypt/argon2)
+	• Constant-time comparison
+	• Account lockout with exponential backoff
+	• Progressive delay after failures
+
+Token Strategy
+	• Short-lived access tokens (10–15 min)
+	• Rotating refresh tokens
+	• Refresh token reuse detection
+	• Token binding to device (if possible)
+“If a refresh token is used twice, assume compromise and revoke session family.”
+
+Adaptive MFA
+	• Only trigger when risk score high.
+	• Do not prompt on every login (bad UX).
+	• Use device recognition.
+
+Secure Cookie Config
+Set-Cookie:
+HttpOnly
+Secure
+SameSite=Strict
+
+6️⃣ Edge Case Questions
+❓ “How would you handle false positives?”
+Correct answer:
+“I would not permanently lock account on first anomaly.
+Instead apply step-up authentication and allow recovery path.”
+This shows product understanding.
+
+❓ “How do you protect against distributed credential stuffing?”
+Strong answer:
+“Per-account rate limiting is more effective than per-IP.
+I would throttle login attempts per user ID regardless of source IP.”
+
+❓ “Is storing JWT in localStorage safe?”
+Correct:
+“No. If XSS exists, attacker can steal it.
+Prefer HttpOnly cookie with CSRF protection.”
+
+❓ “How would you secure mobile login?”
+	• Certificate pinning
+	• Device binding
+	• Secure keystore storage
+	• App attestation
