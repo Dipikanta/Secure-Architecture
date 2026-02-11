@@ -1,0 +1,98 @@
+Snenario 1 : We have a marketplace where vendors can view their orders. How would you design authorization so that:
+a) Vendor A cannot access Vendor B data
+b) Admins have scoped privileges
+c) System scales to millions of orders
+d) Performance is not impacted
+
+Ans: 
+1️⃣ First Clarify the Model
+I’ll assume we have three actors — Vendor, Admin, and System services. APIs are microservice-based. I’ll design this with strong object-level authorization because in marketplaces, BOLA is the most common critical vulnerability.
+
+2️⃣ Authentication Layer
+Authentication would be handled via OAuth2 with short-lived JWTs.
+Each JWT would contain:
+	• subject (vendor_id or admin_id)
+	• role
+	• scoped permissions
+	• tenant identifier”
+Add:
+“JWT signature must be validated and audience/issuer verified at API gateway level.”
+
+3️⃣ Authorization Model (Core of Answer)
+I would avoid pure RBAC because it’s insufficient for multi-tenant marketplaces. Instead I would use a hybrid RBAC + ABAC model.
+	• RBAC for high-level role (Vendor, Admin)
+	• ABAC for object-level checks (vendor_id must match order.vendor_id)
+
+“For order APIs, authorization must be enforced at query level, not after retrieval.”
+Example:
+Instead of:
+SELECT * FROM orders WHERE order_id = ?
+Use:
+SELECT * FROM orders 
+WHERE order_id = ? 
+AND vendor_id = authenticated_vendor_id
+
+“This eliminates the risk of IDOR/BOLA even if developer forgets explicit checks.”
+
+4️⃣ Admin Scoped Privileges
+“They should never have unrestricted access by default.”
+Then:
+	• Define fine-grained scopes:
+		○ read:orders
+		○ refund:orders
+		○ view:financials
+Then:
+“Use policy engine (like OPA-style evaluation) for dynamic policies such as:
+	• Admin can only access vendors in their region
+	• Finance team cannot modify orders”
+
+5️⃣ Performance at Scale
+“To ensure performance with millions of orders:”
+	• Index on (vendor_id, order_id)
+	• Partition by vendor_id if needed
+	• Avoid centralized authorization DB lookups
+	• Prefer stateless token validation
+	• Cache policy decisions where safe
+	• Push authz close to data layer
+Then say:
+“Authorization must be O(1) per request — no external calls per request.”
+
+6️⃣ Service-to-Service Security
+“Internal microservices should not trust forwarded headers.
+Use mTLS with service identity and propagate validated auth context securely.”
+
+7️⃣ Logging & Detection
+“Log denied access attempts.
+Alert on sequential order ID access attempts — possible enumeration attack.”
+
+8️⃣ Key Principles:
+Default deny
+Enforce authz at data layer
+Hybrid RBAC + ABAC
+Stateless validation
+Policy-driven scaling
+
+❓ 1. “What if vendor has sub-users?”
+“I would introduce hierarchical authorization.
+Sub-users would have scoped permissions tied to vendor_id.
+Policies would evaluate both vendor context and user scope.”
+
+❓ 2. “What if order service calls payment service?”
+“User-level authorization is enforced at API boundary.
+Downstream services should validate service identity but not re-evaluate user auth unless accessing sensitive user data.”
+
+❓ 3. “How do you test for BOLA?”
+Role-based automated tests
+Fuzzing object IDs
+Negative integration tests
+DAST API scanning
+Bug bounty signals
+
+❓ 4. “Can JWT be trusted fully?”
+“No. Signature must be validated. Claims must not be blindly trusted.
+Never accept unsigned tokens.
+Verify exp, nbf, aud, iss.”
+
+Attacks:
+alg=none attack
+Key confusion attack
