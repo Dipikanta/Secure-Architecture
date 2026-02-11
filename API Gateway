@@ -1,0 +1,159 @@
+🔥 API Gateway Security Architecture for E-Commerce Applications:
+
+1️⃣ “How would you design security controls at an API Gateway for a large e-commerce platform?”
+	“In a microservices-based e-commerce architecture, the API Gateway acts as the primary ingress control point. However, while it can enforce certain cross-cutting security concerns like authentication, rate limiting, and schema validation, it should not be treated as the only security layer. 
+Authorization and business logic validation must still exist at the service level.”
+
+2️⃣ What Security Controls Belong at API Gateway
+We structure in layers.
+
+🛡️ 1. TLS Termination & Encryption
+At gateway:
+	• Enforce HTTPS
+	• Disable weak ciphers
+	• Enforce TLS 1.2+
+	• HSTS headers
+	“Between gateway and internal services, I would enforce mTLS to prevent lateral movement and service impersonation.”
+
+🛡️ 2. Authentication Enforcement
+Gateway responsibilities:
+	• Validate JWT signature
+	• Validate token expiry
+	• Validate issuer
+	• Validate audience
+Important:
+	“The gateway should verify identity, but not enforce fine-grained authorization.”
+
+Trick Question:
+❓ “Why not handle authorization fully at gateway?”
+Correct answer:
+	“Because object-level authorization decisions require business context that resides in downstream services. Centralizing it at gateway can lead to inconsistent enforcement and tight coupling.”
+
+🛡️ 3. Rate Limiting & Throttling
+At gateway:
+	• Per-IP rate limiting
+	• Per-user rate limiting
+	• Per-token rate limiting
+	• Burst + sustained rate control
+	“I would implement token bucket or leaky bucket algorithms, and differentiate between authenticated and unauthenticated endpoints.”
+	• Stricter limits for login
+	• Stricter limits for gift card balance APIs
+	• Relaxed limits for browsing
+
+🛡️ 4. Request Size & Schema Validation
+Gateway can enforce:
+	• Max body size
+	• Max header size
+	• JSON schema validation
+	• Content-type enforcement
+Prevents:
+	• Large payload DoS
+	• Malformed requests
+	• Deserialization abuse
+
+🛡️ 5. Basic WAF Capabilities
+Gateway can:
+	• Block common injection patterns
+	• Detect SQLi patterns
+	• Detect obvious XSS payloads
+	“WAF is a detection layer, not a substitute for secure coding.”
+
+🛡️ 6. Bot & Abuse Detection Signals
+Gateway is good for:
+	• IP reputation
+	• User-agent anomalies
+	• Geo velocity
+	• Device fingerprint headers
+Important for ATO & scraping.
+
+3️⃣ What Should NOT Be Done at Gateway
+	“Certain controls must not be centralized at the gateway.”
+❌ Object-Level Authorization
+❌ Business Logic Validation
+❌ Order state validation
+❌ Coupon eligibility logic
+Why?
+Because:
+	• Requires database access
+	• Requires domain context
+	• Leads to duplication
+	• Violates separation of concerns
+
+4️⃣ Microservices Security Beyond Gateway
+	“Security must continue beyond the gateway.”
+
+🔐 1. Service-to-Service Authentication
+	• mTLS
+	• SPIFFE/SPIRE identity
+	• Service mesh (Istio/Linkerd)
+Prevents rogue services.
+
+🔐 2. Zero Trust Internal Network
+Never trust internal traffic just because it’s internal.
+Every service should:
+	• Validate JWT
+	• Validate identity
+	• Enforce authorization
+
+🔐 3. Egress Control
+Control outbound traffic from services.
+Prevents:
+	• SSRF abuse
+	• Data exfiltration
+
+5️⃣ Advanced Gateway Considerations:
+
+🔎 1. Token Propagation Risks
+Gateway validates token.
+But:
+	• Does it forward entire token?
+	• Does it forward only user ID?
+	• Does it create internal token?
+	“I prefer gateway validating external JWT and issuing an internal short-lived service token to reduce trust in external token.”
+
+🔎 2. API Versioning & Shadow APIs
+At scale:
+	• Many deprecated endpoints remain exposed.
+	• Shadow APIs increase attack surface.
+Gateway can help with:
+	• API discovery
+	• Deprecation enforcement
+	• Blocking unknown endpoints
+
+🔎 3. Circuit Breaking & DoS Protection
+Gateway must protect:
+	• Downstream service overload
+	• Thundering herd effect
+Mention:
+	• Timeout limits
+	• Retry limits
+	• Circuit breaker pattern
+
+6️⃣ E-commerce-Specific Considerations
+	“During peak sales, API gateway must dynamically adjust rate limits and enforce stricter bot controls to prevent automated bulk purchases.”
+
+7️⃣ Common Mistakes Companies Make
+	1. Treating gateway as silver bullet.
+	2. Not implementing internal authorization.
+	3. Allowing internal services to bypass gateway.
+	4. Exposing admin APIs without segregation.
+	5. Not monitoring gateway logs for anomaly detection.
+
+8️⃣ Follow-Up Questions:
+❓ Should internal services bypass the gateway?
+Correct answer:
+	“In most architectures, east-west traffic should not rely on the same external gateway. Instead, service mesh with mTLS and policy enforcement should protect internal communication.”
+
+❓ Where should JWT be validated — gateway or service?
+Correct answer:
+	“At minimum, gateway must validate signature and expiry. Services should validate claims relevant to authorization to prevent confused deputy attacks.”
+
+❓ How do you prevent gateway from becoming single point of failure?
+Answer:
+	• Horizontal scaling
+	• HA deployment
+	• Multi-region redundancy
+	• Autoscaling
+	• Health checks
+
+	“In summary, API Gateway should enforce identity verification, rate limiting, and coarse-grained protections, but fine-grained authorization and business validation must remain within services. Security must be layered across ingress, service mesh, and application logic.”
