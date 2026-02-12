@@ -1,0 +1,105 @@
+SCENARIO
+	E-commerce mobile app is seeing large-scale coupon abuse and wallet fraud.
+	Attackers are reverse engineering the APK and automating API requests.
+	As Senior Manager – Product Security, what do you do?
+
+✅ Step 1 — “I would approach this in four layers — client hardening, API enforcement, abuse detection, and business logic correction. 
+Coupon fraud is rarely just a mobile issue — it’s usually weak server-side validation combined with automation.”
+
+🟢 LAYER 1 — CLIENT HARDENING (Raise Attack Cost)
+	“Mobile hardening does not prevent fraud entirely, but it increases attacker cost.”
+1️⃣ Reverse Engineering Resistance
+	• Enable R8/ProGuard
+	• Remove debug logs
+	• Encrypt sensitive strings
+	• Detect tampering
+	“However, security must not depend on obfuscation because attackers can still instrument runtime.”
+
+2️⃣ Certificate Pinning
+Why?
+Attackers often:
+	• Intercept traffic
+	• Study API structure
+	• Replay requests
+Pinning slows analysis.
+	“Pinning can be bypassed on rooted devices, so backend enforcement is critical.”
+
+3️⃣ Root/Jailbreak Detection
+	“We detect rooted devices and flag them in backend risk scoring. Instead of blocking all users, we reduce sensitive actions such as wallet usage or coupon stacking.”
+
+🟡 LAYER 2 — API ENFORCEMENT (The Real Fix)
+	“Coupon fraud typically happens because the backend trusts client-provided state.”
+	• Coupon eligibility logic done client-side
+	• Multiple account creation
+	• Replay of coupon API
+	• Parameter tampering
+	• Race condition exploitation
+
+1️⃣ Server-Side Validation
+	• Never trust client eligibility
+	• Validate coupon usage count server-side
+	• Validate user/account/device combination
+	“Eligibility, stacking logic, and limits must be enforced server-side — never client-side.”
+
+2️⃣ Idempotency & Replay Protection
+Attackers replay coupon apply API.
+Fix:
+	• Use nonce
+	• Use request signing
+	• Use idempotency keys
+	• Bind coupon to order session
+
+3️⃣ Rate Limiting & Behavioral Controls
+	• Rate limit coupon apply endpoint
+	• Detect abnormal request velocity
+	• Device fingerprint correlation
+
+🔵 LAYER 3 — ABUSE DETECTION (Very Important in E-commerce)
+	“Fraud prevention is continuous — I would implement behavioral analytics.”
+	• Track coupon attempts per device
+	• Track per IP velocity
+	• Correlate accounts sharing devices
+	• Detect emulator usage
+	“Device fingerprinting combined with anomaly detection significantly reduces automated abuse.”
+
+🔴 LAYER 4 — BUSINESS LOGIC FIX
+	“If abuse is large scale, it indicates logic design weakness. I would partner with product teams to redesign coupon rules.”
+Examples:
+	• One coupon per verified phone number
+	• Progressive eligibility
+	• Risk-based coupon value
+	• Backend state locking
+This shows cross-functional leadership.
+
+🎯 FULL POLISHED ANSWER 
+	“I would approach coupon fraud in four layers — client hardening, API enforcement, behavioral detection, and business logic redesign.
+	On the client side, I would increase attack cost through obfuscation, certificate pinning, and root detection. However, mobile controls are bypassable, so real enforcement must happen server-side.
+	At the API layer, I would ensure eligibility logic is entirely server-side, implement rate limiting and idempotency protections, and prevent replay or race condition abuse.
+	In parallel, I would deploy behavioral analytics to detect abnormal coupon attempts across devices and accounts.
+	Finally, I would work with product teams to redesign coupon logic to reduce systemic abuse opportunities.
+	The objective is to shift from reactive blocking to architectural resilience.”
+That answer will impress.
+
+
+🔥 (Tricky Follow-Ups)
+
+❓ Follow-Up 1:
+“If attackers bypass pinning using Frida, what do you do?”
+Correct direction:
+	• Runtime integrity checks
+	• Backend risk scoring
+	• Detect suspicious patterns
+	• Don’t rely on client
+
+❓ Follow-Up 2:
+“How do you detect emulator-based abuse?”
+Answer:
+	• Emulator fingerprint signals
+	• Device attestation (SafetyNet / Play Integrity API)
+	• Unusual hardware profile patterns
+
+❓ Follow-Up 3:
+“What if abuse is coming from legitimate devices?”
+Strong answer:
+	“Then the issue is incentive design and backend control weakness, not client tampering. We focus on business logic and rate limiting.”
+
