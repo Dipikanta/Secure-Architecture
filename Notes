@@ -1,0 +1,257 @@
+❓ Q1 — Design a Secure Checkout System
+You must cover:
+	• Authentication
+	• Authorization
+	• API security
+	• Payment flow
+	• Order data
+	• Mobile + web + backend
+	• Fraud / bot detection
+	• Logging & monitoring
+
+✅ Answer (Structured)
+1️⃣ Identity & Authentication
+	• Use OAuth2/JWT for both web and mobile.
+	• Short-lived access tokens + refresh tokens.
+	• Enforce MFA for high-risk operations (e.g., payment change).
+2️⃣ Authorization & Access Control
+	• Validate user authorization for every API.
+	• No client-side assumptions.
+	• Use ABAC (Attribute-based) for fine-grained checks (userId == order.userId).
+3️⃣ Data & Network Protection
+	• TLS everywhere (mobile and web).
+	• Sensitive fields encrypted both in transit and at rest (card tokens).
+	• Use a secure payment gateway (PCI DSS compliance).
+4️⃣ Threat & Abuse Mitigation
+	• Idempotency keys for checkout to prevent replay/double spend.
+	• Rate limiting per user/IP/device.
+	• Strong bot detection (fingerprinting + challenge).
+	• JWT stored securely (keychain/keystore on mobile).
+5️⃣ Detection & Monitoring
+	• Log all checkouts with correlation IDs.
+	• Use SIEM to detect spikes, anomalies, shared device patterns.
+	• Alerts for unusual refund/fraud patterns.
+
+🔥 Follow-Up Trap #1:
+ “How do you prevent someone from creating fake orders to drain inventory?”
+🎯 Answer
+	• Enforce CAPTCHA at suspicious threshold.
+	• Use device fingerprinting.
+	• Risk score based on velocity and patterns.
+	• Quarantine high-risk orders for manual review.
+
+🔥 Follow-Up Trap #2:
+“What if JWT is stolen from mobile?”
+🎯 Answer
+	• Use short expiry + refresh token rotation.
+	• Track device fingerprints and geolocation.
+	• Revoke tokens for suspicious sessions.
+	• Detect via behavioral analytics.
+
+❓ Q2 — Secure API Architecture for Microservices
+
+✅ Answer (Structured)
+1️⃣ Identity & Authentication
+	• API Gateway with JWT validation.
+	• Internal mTLS between services.
+	• API keys for third-party integrations.
+2️⃣ Authorization & Access Control
+	• Central policy engine (OPA/Policy as Code).
+	• Partial trust at gateway → full check at service.
+3️⃣ Data & Network
+	• Zero trust between services.
+	• Service mesh with RBAC at service level.
+	• Limits on privileges per service.
+4️⃣ Threat & Abuse
+	• Rate limiting and quotas at gateway.
+	• Request size limits, JSON schema validation.
+	• Rejection of unexpected fields (mass assignment).
+5️⃣ Monitoring
+	• Centralized audit logging.
+	• Tracing (context propagation).
+	• Anomaly detection (e.g., BOLA attempts).
+
+🔥 Follow-Up Trap:
+“Should authorization be done only at the gateway?”
+🎯 Answer:
+No — gateway provides coarse authZ.
+Critical object-level authorization must be enforced at the microservice that owns the data.
+
+❓ Q3 — Secure Mobile + API Architecture (Preventing API Abuse)
+Focus on trust boundaries.
+
+✅ Answer (Structured)
+1️⃣ Identity
+	• OAuth2/JWT
+	• Device binding (unique device ID/token)
+2️⃣ Authorization
+	• Mobile app never trusted for authZ.
+	• Validate everything server-side.
+3️⃣ Data & Network
+	• TLS + certificate pinning.
+4️⃣ Threat & Abuse
+	• Bot detection
+	• Behavioral anomalies
+	• Abuse patterns (coupon, inventory scraping, wallet steal)
+5️⃣ Monitoring
+	• Correlate mobile device pedigree
+	• Detect emulator/sandbox usage
+	• Track failed retries and velocity spikes
+
+🔥 Follow-Up:
+“How do you handle rooted/jailbroken devices?”
+🎯 Answer:
+	• Detect at runtime
+	• Apply risk score (restrict sensitive actions)
+	• Not block entirely — balance UX
+	• Log + alert suspicious sessions
+
+❓ Q4 — Design Secure Cloud Architecture for Multi-Region E-commerce
+	• Availability + resiliency
+	• Failover
+	• Data protection
+	• Least privilege
+	• Secure communication
+
+✅ Answer
+1️⃣ Identity
+	• Federation (SAML/OIDC) for workforce
+	• Short-lived roles for services
+2️⃣ Authorization
+	• Role separation by region
+	• Cross-account roles with strict trust
+3️⃣ Data & Network
+	• VPC isolation
+	• Private subnets + endpoints
+	• Avoid public API access where possible
+4️⃣ Threat & Abuse
+	• Encryption
+	• Backup with immutability
+	• Guardrails (CSPM/SecOps automation)
+5️⃣ Monitoring
+	• Central SIEM
+	• Central logging aggregators
+	• Active tracing across services
+
+🔥 Follow-Up:
+“What if attacker hits a region failover?”
+🎯 Answer:
+Design with:
+	• Health-checked routing
+	• Automated rollbacks
+	• Canary releases
+	• Immutable infrastructure
+
+❓ Q5 — Secure AI/ML Service Architecture
+
+✅ Answer
+1️⃣ Identity
+	• Service authentication with mTLS + short-lived keys
+2️⃣ Authorization
+	• Role separation between training/admin and inference
+3️⃣ Data & Network
+	• Train data storage encrypted
+	• Egress control
+4️⃣ Threat & Abuse
+	• Protect against:
+		○ Data poisoning
+		○ Model extraction
+		○ Prompt injection
+		○ Model inversion
+5️⃣ Monitoring
+	• Model behavior monitoring
+	• Drift detection
+	• Anomalous query patterns
+
+🔥 Follow-Up:
+“How do you prevent prompt injection in LLM APIs?”
+🎯 Answer:
+	• Context sanitization
+	• Guardrails via prompt policies
+	• Reject malicious patterns
+	• Semantic anomaly detection
+
+❓ Q6 — How do you ensure secure data processing pipelines?
+This is web/cloud crossover.
+
+✅ Answer
+1️⃣ Identity
+	• Least privilege
+2️⃣ Authorization
+	• Policy enforcement
+3️⃣ Data
+	• Encryption
+	• Tokenization
+4️⃣ Threat
+	• Pipeline integrity
+	• Version control
+	• Hashing & checksums
+5️⃣ Monitoring
+	• Audit trails
+	• Alerts for schema anomalies
+
+❓ Q7 — Secure DevOps / CI/CD Architecture
+
+✅ Answer
+1️⃣ Identity
+	• Minimal CI runner permissions
+2️⃣ Authorization
+	• Approval workflows
+	• RBAC in pipelines
+3️⃣ Data
+	• Secrets in vaults
+4️⃣ Threat
+	• Scan IaC
+	• SAST/DAST gates
+5️⃣ Monitoring
+	• Audit pipeline events
+	• Alerts on risky changes
+
+❓ Q8 — How to design defense-in-depth?
+
+✅ Answer
+Defense-in-depth means:
+Layer 1 — Network (firewalls, VPC)
+Layer 2 — Perimeter (API GW)
+Layer 3 — Auth (JWT, MFA)
+Layer 4 — AuthZ (RBAC/ABAC)
+Layer 5 — App Security (validation, logic)
+Layer 6 — Monitoring & IR
+Say:
+	“The goal is redundant protection so if one layer fails, another catches the risk.”
+
+🔥 Follow-Up:
+“Is WAF enough?”
+🎯 Answer:
+No — WAF helps but cannot replace secure coding, authorization, and fraud prevention.
+
+❓ Q9 — How to handle security in microservices?
+
+✅ Answer
+	• API Gateway → coarse validation
+	• Service mesh → identity + encryption
+	• Central OPA policy → policy and access logic
+	• Service → final authZ + business logic
+
+❓ Q10 — How to evaluate security posture of architecture?
+
+✅ Answer
+Use metrics:
+	• Vulnerability backlog
+	• MTTR
+	• % services scanned
+	• % services threat-modeled
+	• Breach attempts
+	• Mean time to detect (MTTD)
+You must tie to business.
+
+
+🧠 FINAL RETENTION TRICK
+For every architecture question, remember:
+I.A.N.T.M
+Identity
+Authorization
+Network/data
+Threat reduction
+Monitoring/response
+If you can apply this pattern, you can handle ANY variant.
