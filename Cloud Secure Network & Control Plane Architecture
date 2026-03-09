@@ -1,0 +1,779 @@
+Q. Use case : Write a Secure Architecture design for an AI Document Processing Platform common in companies building AI-powered SaaS products (legal document analysis, medical record summarization, contract extraction, etc.). 
+Companies running such workloads often use cloud platforms like Amazon Web Services or Google Cloud and orchestrate services with Kubernetes while using service meshes such as Istio.
+Secure Network & Control Plane Architecture
+Covers:
+	• VPC segmentation
+	• Private/public subnet design
+	• Egress filtering
+	• Service mesh mTLS
+	• Control plane vs data plane separation
+	• Bastion host risk
+  • Admin plane hardening
+
+Ans : Below is a single consolidated architecture diagram for the AI Document Processing Platform example.
+It includes:
+	• Network segmentation
+	• Public/private subnets
+	• Service mesh traffic
+	• Control plane vs data plane
+	• Admin plane
+	• All major request flows
+	• Trust boundaries
+	• Threat entry points
+
+                                   UNTRUSTED INTERNET
+                                         │
+                                         │
+                           ───────── TRUST BOUNDARY 1 ─────────
+                                         │
+                                         ▼
+                                Public Edge Layer
+                           (Public Subnet / DMZ Zone)
+                         +----------------------------+
+                         |  API Gateway / LB          |
+                         |  TLS termination           |
+                         |  Rate limiting             |
+                         +----------------------------+
+                                   │
+                     Flow A: User API requests
+                                   │
+                                   ▼
+                    ───────── TRUST BOUNDARY 2 ─────────
+                       Private Application Subnet
+                       (Data Plane - Microservices)
+       +--------------------------------------------------------------+
+       |                                                              |
+       |   Auth Service  ──────── mTLS ──────── Ingestion Service     |
+       |        │                                   │                 |
+       |        │                                   │                 |
+       |        │                                   ▼                 |
+       |        │                           Document Metadata         |
+       |        │                           Processing Service        |
+       |        │                                   │                 |
+       |        │                                   ▼                 |
+       |        └──────────────► Job Queue ◄────────┘                 |
+       |                                │                             |
+       |                                │ Flow B: Job dispatch        |
+       +--------------------------------│-----------------------------+
+                                        │
+                                        ▼
+                         ───── TRUST BOUNDARY 3 ─────
+                           AI Processing Subnet
+                             (Worker Cluster)
+                 +------------------------------------------+
+                 | AI Worker Pods                           |
+                 |                                          |
+                 |  Model Inference Engine                  |
+                 |  Document Parsing Pipeline               |
+                 |                                          |
+                 |  Internal service-to-service mTLS        |
+                 +------------------------------------------+
+                                │
+                                │ Flow C: Retrieve documents
+                                ▼
+                     ───── TRUST BOUNDARY 4 ─────
+                          Data Storage Subnet
+                +--------------------------------------+
+                | Metadata Database                    |
+                |                                      |
+                | Object Storage Access Proxy          |
+                | (documents stored in storage bucket) |
+                +--------------------------------------+
+                                │
+                                │ Flow D: Document read/write
+                                ▼
+                     INTERNAL SERVICE COMMUNICATION
+                         (Service Mesh Layer)
+          +---------------------------------------------------+
+          | Sidecar Proxy (mTLS)                              |
+          |                                                   |
+          | Service A → Proxy A → encrypted traffic → Proxy B|
+          |                                   → Service B     |
+          +---------------------------------------------------+
+
+────────────────────────────────────────────────────────────────────────
+                         CONTROL PLANE NETWORK
+────────────────────────────────────────────────────────────────────────
+
+                     ───── TRUST BOUNDARY 5 ─────
+                     Kubernetes Control Plane
+             +-------------------------------------------+
+             | Kubernetes API Server                     |
+             | Scheduler                                 |
+             | Controller Manager                        |
+             +-------------------------------------------+
+                           │
+                           │ Flow E: Cluster management
+                           ▼
+                     Worker Nodes / Pods
+                     (Application Data Plane)
+
+────────────────────────────────────────────────────────────────────────
+                          ADMIN PLANE NETWORK
+────────────────────────────────────────────────────────────────────────
+
+                ───── TRUST BOUNDARY 6 ─────
+Engineer Laptop
+      │
+      │ Flow F: Administrative login
+      ▼
+Identity Provider
+      │
+      ▼
+Admin Access Gateway
+      │
+      ▼
+Bastion Host (Admin Subnet)
+      │
+      │ Flow G: SSH / Debug access
+      ▼
+Internal Servers / Worker Nodes
+
+────────────────────────────────────────────────────────────────────────
+                            EGRESS NETWORK
+────────────────────────────────────────────────────────────────────────
+
+                    Private Services / AI Workers
+                                │
+                                │ Flow H: Outbound traffic
+                                ▼
+                         Egress Gateway
+                                │
+                                ▼
+                      External Dependencies
+                   (model registry / external APIs)
+
+=======================================================================
+                              THREAT LOCATIONS
+=======================================================================
+
+T1  Internet attacker probing API Gateway
+T2  Malicious request targeting application microservices
+T3  Compromised application container attempting lateral movement
+T4  Compromised worker node accessing sensitive storage
+T5  Control plane API abuse or credential theft
+T6  Admin credential phishing or endpoint compromise
+T7  Bastion host compromise
+T8  Data exfiltration through outbound connections
+T9  Service impersonation inside microservice network
+T10 Unauthorized internal service access across trust boundaries
+
+=======================================================================
+                           MAIN SYSTEM FLOWS
+=======================================================================
+
+Flow A  User → API Gateway → Application Services
+Flow B  Application Services → Job Queue → AI Workers
+Flow C  AI Workers → Retrieve Documents
+Flow D  Data Storage access (metadata + documents)
+Flow E  Control Plane → Worker Nodes
+Flow F  Engineer → Identity Provider → Admin Gateway
+Flow G  Bastion → Internal Servers
+Flow H  Internal services → External dependencies
+
+
+Part 1 — What Happens After the API Gateway
+We start from this point in the architecture:
+
+User → Internet → API Gateway
+The API Gateway is the last component exposed directly to the internet.
+Everything after it exists inside the private network.
+
+1. Crossing Trust Boundary 2 (Edge → Application Network)
+After the API Gateway processes the request, it forwards traffic into the private application subnet.
+The reason this boundary exists is simple:
+Public internet traffic must not directly reach internal services
+So the gateway becomes the single controlled entry point.
+
+2. Application Services Layer (Private Subnet)
+Inside the private subnet we have microservices.
+                 Private Application Subnet
+        +------------------------------------------+
+        | Auth Service                             |
+        | Document Ingestion Service               |
+        | Metadata Processing Service              |
+        | Job Queue                                |
+        +------------------------------------------+
+These services run in containers on orchestrated infrastructure such as Kubernetes.
+Each service performs a different responsibility.
+
+2.1 Flow A — Authentication
+First request flow:
+User → API Gateway → Auth Service
+Example:
+POST /login
+POST /upload-document
+The Auth service:
+• validates credentials
+• generates access tokens
+• enforces identity rules
+After authentication succeeds, the request continues to other services.
+
+2.2 Flow B — Document Upload
+Next flow:
+API Gateway → Document Ingestion Service
+Example request:
+POST /documents/upload
+The ingestion service performs several actions.
+Subflow:
+Upload request
+      │
+      ▼
+Store file temporarily
+      │
+      ▼
+Generate metadata
+      │
+      ▼
+Send processing job to queue
+This service does not run heavy AI models.
+Its purpose is simply accepting and registering the document.
+
+3. Internal Service Communication (Service Mesh)
+Inside the application layer, services communicate with each other.
+But they do not talk directly.
+Instead communication passes through a service mesh such as Istio.
+Architecture:
+Service Container
+       │
+       ▼
+Sidecar Proxy
+
+Actual communication flow becomes:
+Service A
+   │
+   ▼
+Proxy A
+   │
+   │ encrypted mTLS traffic
+   ▼
+Proxy B
+   │
+   ▼
+Service B
+
+This layer handles:
+service authentication
+encrypted traffic
+service identity verification
+Without this layer, any compromised service could impersonate another.
+
+4. Job Queue System
+After the ingestion service processes a document, it creates a processing job.
+Upload Service → Job Queue
+The queue exists because AI processing is slow.
+Architecture:
+User uploads document
+        │
+        ▼
+Job queue stores processing request
+        │
+        ▼
+AI workers consume jobs asynchronously
+
+Typical queue technologies include:
+message brokers
+streaming systems
+task queues
+The queue separates:
+user interaction speed
+AI processing speed
+
+5. Crossing Trust Boundary 3 (Application → Worker Cluster)
+Now the system moves to the AI processing environment.
+Why this boundary exists:
+AI workers execute complex workloads
+They should not be reachable by normal services
+So they are placed in another subnet or cluster.
+
+6. AI Processing Subnet
+AI workers handle:
+document parsing
+model inference
+data extraction
+
+Architecture:
+AI Worker Cluster
++------------------------------------+
+| Worker Pod                         |
+|                                    |
+| Document Parser                    |
+| AI Model Runtime                   |
+|                                    |
++------------------------------------+
+Worker flow:
+Worker polls queue
+        │
+        ▼
+Retrieve document
+        │
+        ▼
+Run model inference
+        │
+        ▼
+Store results
+Workers may also call internal APIs during processing.
+
+7. Crossing Trust Boundary 4 (Processing → Data Layer)
+Data storage is the most sensitive zone.
+So it lives in a separate subnet.
+
+8. Data Storage Layer
+This layer contains two main components.
+Data Subnet
++--------------------------------------+
+| Metadata Database                    |
+| Object Storage Access Proxy          |
++--------------------------------------+
+Metadata database
+Stores:
+document metadata
+processing status
+user ownership
+results
+Object storage proxy
+Documents themselves are stored in object storage systems.
+
+The proxy exists because:
+direct storage access should not be allowed from all services
+So the flow becomes:
+AI Worker
+   │
+   ▼
+Storage Proxy
+   │
+   ▼
+Object Storage
+
+9. Control Plane (Infrastructure Management)
+This system runs on container orchestration infrastructure.
+Control plane architecture:
+Control Plane
++--------------------------------+
+| Kubernetes API Server          |
+| Scheduler                      |
+| Controller Manager             |
++--------------------------------+
+
+Responsibilities:
+schedule containers
+manage cluster state
+deploy new services
+
+Control plane traffic:
+Control Plane → Worker Nodes
+This traffic is management traffic, not user data.
+
+That’s why the architecture separates:
+Control plane
+Data plane
+
+10. Admin Plane
+Now consider human administrators.
+Engineers need access to manage systems.
+Access flow:
+Engineer Laptop
+       │
+       ▼
+Identity Provider
+       │
+       ▼
+Admin Gateway
+       │
+       ▼
+Bastion Host
+       │
+       ▼
+Internal servers
+The bastion acts as a jump server.
+Engineers connect there before reaching internal infrastructure.
+
+
+-> Threats and Mitigations:
+Complete Architecture With Threat Origins & Mitigation Points
+                               INTERNET
+                                 │
+                                 │
+                    ───── TRUST BOUNDARY 1 ─────
+                                 │
+                                 ▼
+
+                        +--------------------+
+                        |    API Gateway     |
+                        | TLS termination    |
+                        | Authentication     |
+                        | Rate limiting      |
+                        +--------------------+
+
+Threat Origin T1
+Internet attacker sends:
+- API abuse
+- Injection attacks
+- Auth bypass attempts
+
+Mitigation
+- WAF
+- Input validation
+- Rate limiting
+- Authentication
+
+
+                                 │
+                                 │ Flow A
+                                 ▼
+
+                    ───── TRUST BOUNDARY 2 ─────
+
+                  PRIVATE APPLICATION SUBNET
+                        (Microservices)
+
+        +--------------------------------------------------+
+        |                                                  |
+        |   Auth Service  ←→  Ingestion Service            |
+        |        │               │                          |
+        |        │               ▼                          |
+        |        │      Metadata Processing Service        |
+        |        │               │                          |
+        |        └──────► Job Queue ◄───────┘               |
+        |                       │                           |
+        +-----------------------│---------------------------+
+                                │
+                                ▼
+
+Threat Origin T2
+Malicious input reaches backend services
+Possible issues:
+- Path traversal
+- SSRF
+- Command injection
+- Deserialization
+
+Why here?
+Because backend services process user data.
+
+Mitigation
+- Input validation
+- sandbox file access
+- service authorization
+- strict API contracts
+
+
+
+                                │
+                                │ Flow B
+                                ▼
+
+                 ───── TRUST BOUNDARY 3 ─────
+
+                       AI WORKER CLUSTER
+
+            +-------------------------------------+
+            |  AI Processing Workers              |
+            |                                     |
+            |  Document Parsing                   |
+            |  OCR / AI inference                 |
+            |                                     |
+            +-------------------------------------+
+
+-> Threat Origin T3
+Compromised container tries:
+- privilege escalation
+- lateral movement
+- service impersonation
+
+Q. Why here?
+Workers process untrusted documents.
+Malicious files may exploit parser libraries.
+
+-> Mitigation:
+- container isolation
+- seccomp profiles
+- read-only filesystem
+- runtime security monitoring
+
+                                │
+                                │ Flow C
+                                ▼
+
+                ───── TRUST BOUNDARY 4 ─────
+
+                       DATA STORAGE LAYER
+
+        +--------------------------------------------+
+        | Metadata Database                          |
+        |                                            |
+        | Object Storage (documents)                 |
+        |                                            |
+        +--------------------------------------------+
+
+-> Threat Origin T4
+Compromised service attempts:
+- data exfiltration
+- database dumping
+- unauthorized storage reads
+
+Q. Why here?
+Storage contains sensitive customer data.
+
+-> Mitigation:-
+- strict IAM policies
+- encryption
+- service identity verification
+- database authentication
+
+────────────────────────────────────────────────────
+                SERVICE MESH (INTERNAL NETWORK)
+────────────────────────────────────────────────────
+
+     Service A → Sidecar Proxy → encrypted traffic
+                                  │
+                                  ▼
+                          Sidecar Proxy → Service B
+
+-> Threat Origin T5
+Service impersonation
+or lateral movement.
+
+Q. Why?
+Flat internal networks allow
+service-to-service access.
+
+-> Mitigation:
+- mTLS
+- service identity
+- network policy
+
+────────────────────────────────────────────────────
+                   CONTROL PLANE
+────────────────────────────────────────────────────
+
+             +--------------------------------+
+             | Kubernetes API Server          |
+             | Scheduler                      |
+             | Controller Manager             |
+             +--------------------------------+
+
+-> Threat Origin T6:-
+Attacker steals credentials and
+talks directly to Kubernetes API.
+
+-> Possible attacks:-
+- deploy malicious pods
+- read secrets
+- escalate privileges
+
+Q. Why here?
+Control plane controls entire cluster.
+
+-> Mitigation:-
+- RBAC
+- audit logging
+- restricted API access
+- separate admin network
+
+────────────────────────────────────────────────────
+                    ADMIN PLANE
+────────────────────────────────────────────────────
+
+Engineer Laptop
+      │
+      ▼
+Identity Provider
+      │
+      ▼
+Admin Gateway
+      │
+      ▼
+Bastion Host
+      │
+      ▼
+Internal Servers
+
+-> Threat Origin T7:-
+Admin compromise.
+
+-> Possible attacks:
+- stolen credentials
+- SSH hijacking
+- laptop malware
+
+Q. Why here?
+Admin access bypasses normal defenses.
+
+-> Mitigation:-
+- MFA
+- short-lived credentials
+- session logging
+- device security
+
+────────────────────────────────────────────────────
+                        EGRESS
+────────────────────────────────────────────────────
+
+Internal Services
+        │
+        ▼
+Egress Gateway
+        │
+        ▼
+External APIs
+
+-> Threat Origin T8:
+Data exfiltration.
+Compromised service sends
+data to attacker-controlled server.
+
+Q. Why here?
+Outbound traffic often unrestricted.
+
+-> Mitigation:-
+- outbound firewall
+- domain allowlists
+- traffic monitoring
+
+
+-> Kill Chain:
+Realistic Attacker Kill Chain
+Now we walk through how an attacker might try to move through this architecture.
+
+. Stage 1 — Initial Entry
+Attack begins at:
+Internet → API Gateway
+Attacker sends malicious requests:
+API exploitation
+authentication attacks
+input manipulation
+
+Goal:
+compromise a backend service
+
+. Stage 2 — Compromise Application Service
+Attacker gains control of a container:
+Application Service compromised
+Example outcome:
+remote shell inside container
+Now attacker attempts:
+internal service discovery
+
+. Stage 3 — Lateral Movement
+Attacker scans internal network:
+Compromised Service
+       │
+       ▼
+Discover other microservices
+
+Possible actions:
+call internal APIs
+probe service mesh endpoints
+access internal queues
+
+Goal:
+reach privileged services
+
+. Stage 4 — Access Job Queue
+Attacker interacts with queue system:
+Compromised Service → Job Queue
+
+Possible attack:
+submit malicious jobs
+modify processing tasks
+
+This could cause:
+execution of attacker-controlled workloads
+
+Stage 5 — AI Worker Compromise
+Malicious job executes on worker:
+Queue → AI Worker
+Now attacker gains access to:
+worker environment
+model runtime
+filesystem
+
+Workers may have access to:
+documents
+processing results
+
+Stage 6 — Data Access
+From the worker environment:
+Worker → Storage Proxy
+Worker → Metadata Database
+
+Attacker may attempt:
+data extraction
+unauthorized queries
+
+Goal:
+exfiltrate sensitive documents
+
+Stage 7 — Control Plane Escalation
+Attacker tries to move upward.
+
+Compromised Worker
+       │
+       ▼
+Attempt Kubernetes API access
+
+If control plane credentials are accessible:
+cluster takeover possible
+
+Stage 8 — Admin Plane Targeting
+Separately, attacker may target administrators.
+
+Example attack:
+phishing engineer
+stealing admin credentials
+
+Then attacker attempts:
+Admin Gateway login
+
+If successful:
+full infrastructure control
+
+-> Final Attack Path:
+Complete kill chain:
+Internet
+   │
+   ▼
+API Gateway
+   │
+   ▼
+Application Service
+   │
+   ▼
+Job Queue
+   │
+   ▼
+AI Worker
+   │
+   ▼
+Data Storage
+   │
+   ▼
+Control Plane
+
+Or:
+
+Internet
+   │
+   ▼
+Engineer Phishing
+   │
+   ▼
+Admin Gateway
+   │
+   ▼
+Control Plane
+
+
+-> Key Architectural Insight:-
+This architecture forces attackers to cross multiple trust boundaries:
+
+Internet
+Edge
+Application
+Processing
+Data
+Control plane
+Admin plane
+
+Each boundary exists because different actors have different privileges.
