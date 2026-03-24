@@ -1,0 +1,277 @@
+Covers:
+	• Envelope encryption
+	• Per-tenant keys
+	• HSM-backed KMS
+	• Key rotation
+	• Key deletion lifecycle
+  • Data residency compliance
+
+🏢 Real-world use case:
+Multi-tenant SaaS Healthcare Platform:
+
+Think of a company building:
+Cloud-based Electronic Health Records (EHR) system
+
+Customers:
+Hospitals in India, EU, US
+Each hospital = tenant
+
+Data:
+ •Patient records (PII + PHI)
+ •Prescriptions
+ •Medical history
+
+🔐 Security + compliance requirements
+ •Strong encryption (PHI data)
+ •Per-tenant isolation
+ •Data residency (EU data must stay in EU)
+ •Key rotation
+ •Right to be forgotten (key deletion)
+
+🧠 High-level architecture
+                 ┌──────────────────────────┐
+                 │        Client App        │
+                 └──────────┬───────────────┘
+                            │
+                     HTTPS (TLS)
+                            │
+                ┌───────────▼────────────┐
+                │     API Backend        │
+                └───────────┬────────────┘
+                            │
+        ┌───────────────────┼────────────────────┐
+        │                   │                    │
+        ▼                   ▼                    ▼
+  Auth Service       Data Service         Key Service
+                                              │
+                                              ▼
+                                   Cloud KMS (HSM-backed)
+                                              │
+                                              ▼
+                                       Encrypted Storage
+🔑 Core design choices
+1. Envelope Encryption
+Data encrypted with DEK (Data Encryption Key)
+DEK encrypted with KEK (KMS key)
+2. Per-tenant keys
+Each tenant → separate KEK in KMS
+3. HSM-backed KMS
+
+Cloud KMS (like AWS KMS / GCP KMS) backed by:
+Hardware Security Modules (HSMs)
+Keys never leave secure boundary.
+
+🔄 FULL FLOW (this is what interviewers want)
+🔐 FLOW 1: Data Encryption (Write Path)
+Step 1: Client sends data:
+POST /patients
+{
+  name, diagnosis, reports
+}
+Trust boundary:
+Internet → Backend
+Risk:
+Data in transit interception
+Mitigation:
+TLS (HTTPS)
+Certificate pinning (mobile apps)
+
+Step 2: Backend identifies tenant:
+tenant_id extracted from JWT
+Risk:
+Wrong tenant mapping → data isolation failure
+Mitigation:
+Strong authZ checks
+Never trust client-provided tenant_id
+
+Step 3: Generate Data Encryption Key (DEK):
+Backend calls KMS:
+GenerateDataKey(tenant_key_id)
+
+KMS returns:
+Plaintext DEK
+Encrypted DEK (wrapped by KEK)
+
+🔥 Critical trust boundary:
+KMS → Backend
+Risk 1: DEK exposure in memory:
+Because:
+Plaintext DEK exists temporarily
+Mitigation:
+Use DEK only in memory
+Zero memory after use
+Avoid logging
+
+Risk 2: Compromised backend:
+Attacker can:
+Request unlimited DEKs
+Mitigation:
+IAM roles with least privilege
+Rate limiting KMS calls
+Audit logs
+
+Step 4: Encrypt data:
+Ciphertext = Encrypt(data, DEK)
+Risk:
+Weak crypto implementation
+Mitigation:
+Use standard libs (AES-GCM)
+Never implement crypto manually
+
+Step 5: Store data:
+Database stores:
+{
+  encrypted_data,
+  encrypted_DEK,
+  tenant_id
+}
+Risk:
+DB compromise
+Impact:
+Attacker gets encrypted data + encrypted DEK
+BUT not KEK
+Mitigation:
+This is the strength of envelope encryption
+KEK never leaves KMS
+
+🔓 FLOW 2: Data Decryption (Read Path):
+Step 1: Request comes:
+GET /patients/123
+
+Step 2: Fetch encrypted data:
+DB returns:
+encrypted_data + encrypted_DEK
+
+Step 3: Decrypt DEK via KMS:
+Decrypt(encrypted_DEK)
+
+KMS returns:
+plaintext DEK
+
+🔥 Risk:
+If attacker can call KMS:
+They can decrypt ALL data
+Mitigation:
+Strict IAM policies:
+Only specific service can call decrypt
+Attribute-based access control (tenant scoped)
+
+Step 4: Decrypt data:
+data = Decrypt(ciphertext, DEK)
+Risk:
+Data exposure in logs / memory
+Mitigation:
+Mask logs
+Secure memory handling
+
+🔄 FLOW 3: Key Rotation:
+Why rotation?
+Limit blast radius if key compromised.
+
+Step-by-step:
+Step 1: New KEK created in KMS
+tenant_key_v2
+Step 2: New writes use new key
+GenerateDataKey(v2)
+Step 3: Old data remains encrypted with old key
+No immediate re-encryption.
+
+Step 4 (optional): Background re-encryption:
+Decrypt with old key
+Re-encrypt with new key
+Risk:
+Using old compromised key
+Mitigation:
+Set key expiry
+Gradual re-encryption
+
+🧨 FLOW 4: Key Deletion (Critical for compliance):
+Scenario: Tenant leaves system (GDPR)
+Step 1: Disable key
+Key state → disabled
+Step 2: Schedule deletion (e.g., 7–30 days)
+Step 3: After deletion
+All data becomes unrecoverable
+
+🔥 Risk:
+Accidental deletion
+
+Mitigation:
+Soft delete window
+Multi-party approval (MFA delete)
+Audit logs
+
+🔥 Another risk
+Malicious insider deletes key
+
+Mitigation:
+Separation of duties
+Break-glass workflows
+
+🌍 FLOW 5: Data Residency
+Requirement:
+EU data must stay in EU
+Implementation:
+Step 1: Region-based architecture
+EU tenants → EU KMS + EU DB
+US tenants → US KMS + US DB
+
+Step 2: Tenant routing
+At login:
+tenant_region → route to correct infra
+🔥 Risk:
+Cross-region key usage
+Example:
+EU data decrypted using US KMS
+Mitigation:
+Strict region isolation
+No cross-region key access
+Separate IAM per region
+
+🧠 Trust Boundaries Summary
+Client → Backend (untrusted → trusted)
+Backend → KMS (critical trust boundary)
+Backend → DB (data storage boundary)
+Region boundaries (compliance boundary)
+
+
+💥 Common Interview Traps:
+Trap 1:
+“If DB is compromised, is data safe?”
+Answer:
+Yes, because attacker only gets encrypted data and encrypted DEKs. Without access to KMS KEK, decryption is not possible.
+
+Trap 2:
+“What if backend is compromised?”
+Answer:
+Then attacker can request DEKs and decrypt data. So backend is a critical trust boundary, requiring strong IAM, monitoring, and isolation.
+
+Trap 3:
+“Why not encrypt directly with KMS key?”
+Answer:
+KMS has rate limits and latency; envelope encryption improves performance and scalability.
+
+Trap 4:
+“How do you revoke access to old data?”
+Answer:
+By disabling or deleting KEK, all DEKs wrapped by it become unusable.
+
+Trap 5:
+“How do you handle multi-tenant isolation?”
+Answer:
+Per-tenant KEKs ensure cryptographic isolation even if storage is shared.
+
+🧠 Final mental model (lock this in)
+Data → encrypted by DEK
+DEK → encrypted by KEK (KMS)
+KEK → protected by HSM
+
+Control points:
+Access to DEK → runtime risk
+Access to KEK → catastrophic risk
+Access to KMS → system-wide risk
+
+🎯 One perfect interview answer
+In a multi-tenant cloud system, we use envelope encryption with per-tenant KEKs stored in an HSM-backed KMS. Data is encrypted using DEKs, which are wrapped by tenant-specific KEKs. 
+This ensures strong isolation, scalable encryption, and enables secure key rotation and deletion. Risks primarily arise at trust boundaries such as backend access to KMS and DEK exposure in memory, 
+which are mitigated through strict IAM controls, secure memory handling, and audit monitoring.
