@@ -1,141 +1,282 @@
-Major Business Logic Abuse Categories
+SECURE E-COMMERCE — BUSINESS LOGIC ABUSE
 
-🔴 1. Price Manipulation
-Attack Pattern
-Frontend sends:
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          📱 MOBILE / WEB CLIENT (UNTRUSTED)                  │
+│  - UI flows (browse, cart, checkout)                                         │
+│  - Calls REST/GraphQL APIs                                                   │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Tampering (Burp/Frida)                                                   │
+│   • Hidden API discovery                                                     │
+│   • Replay / automation                                                      │
+│   • Parallel requests (race)                                                 │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │ HTTPS (TLS)
+                                ▼
+========================= 🔥 TRUST BOUNDARY #1 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         🚪 API GATEWAY / BFF                                 │
+│  - AuthN (JWT/OAuth)                                                         │
+│  - Routing                                                                   │
+│  - Basic rate limiting                                                       │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Token replay                                                             │
+│   • Weak rate limiting                                                       │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                ▼
+========================= 🔥 TRUST BOUNDARY #2 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          🧠 MICROSERVICES LAYER                              │
+│                                                                              │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   │
+│  │ Auth Service │   │ Catalog Svc  │   │ Cart Service │   │ Coupon Svc   │   │
+│  │ - user roles │   │ - products   │   │ - add/remove │   │ - generate   │   │
+│  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘   └──────┬───────┘   │
+│         ▼                  ▼                  ▼                  ▼            │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   │
+│  │ Order Svc    │   │ Payment Svc  │   │ Approval Svc │   │ Share Svc    │   │
+│  │ - checkout   │   │ - charge     │   │ - workflows  │   │ - invoices   │   │
+│  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘   └──────┬───────┘   │
+│         ▼                  ▼                  ▼                  ▼            │
+│  ┌──────────────┐   ┌──────────────┐                                 │       │
+│  │ Inventory    │   │ RateLimit    │                                 │       │
+│  │ - stock      │   │ - counters   │                                 │       │
+│  └──────────────┘   └──────────────┘                                 │       │
+│                                                                              │
+│  Threat classes:                                                             │
+│   • Workflow bypass                                                          │
+│   • Role misbinding                                                          │
+│   • Coupon abuse                                                             │
+│   • Rate-limit bypass                                                        │
+│   • Race conditions                                                          │
+└───────────────┬───────────────────────────────┬───────────────────────────────┘
+                │                               │
+                ▼                               ▼
+================ 🔥 TRUST BOUNDARY #3 =================  =======================
+
+┌──────────────────────────────┐           ┌───────────────────────────────────┐
+│ 🗄️ PRIMARY DATABASE          │           │ ⚡ REDIS / CACHE                  │
+│ - users, roles              │           │ - rate limits                     │
+│ - carts, orders             │           │ - locks                           │
+│ - coupons                   │           │ - idempotency keys                │
+│ - shares                    │           │                                   │
+│                                                                              │
+│ Threats: race conditions, stale reads                                        │
+└──────────────────────────────┘           └───────────────────────────────────┘
+
+========================= 🔥 TRUST BOUNDARY #4 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        🌐 EXTERNAL SYSTEMS                                   │
+│  - Payment Gateway                                                          │
+│  - Email/SMS (invoice links)                                                │
+│                                                                              │
+│ Threats: callback abuse, link leakage                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+🧩 NOW — FULL USER JOURNEY (STEP BY STEP + SUB-STEPS)
+
+We follow one user from login → order → delivery.
+
+At each stage:
+👉 I show normal flow → where logic breaks → attack → mitigation
+
+🔐 FLOW 1: LOGIN & SESSION CREATION
+Step 1: User logs in
+Client → POST /login → Auth Service
+-> Sub-steps:
+. Credentials validated
+. JWT issued:
+{ user_id, role, tenant_id }
+
+🔥 Threat: Role Misbinding:
+Why here?
+JWT contains role → backend trusts it
+
+-> Attack:
+Attacker finds endpoint:
+POST /admin/refund
+
+Backend:
+if token.role == "admin":
+   allow
+
+->Root problem:
+Authorization tied to token instead of server state
+
+-> Mitigation:
+. Fetch role from DB every time
+. Central RBAC enforcement
+
+🛍️ FLOW 2: BROWSING & CART
+Step 2: Add item to cart
+POST /cart/add
 {
-   "productId": 101,
-   "price": 499
+ product_id,
+ price
 }
-If backend trusts client price → attacker modifies:
-"price": 1
-Or manipulates:
-	• Discount field
-	• Tax field
-	• Shipping fee
 
-	“All pricing calculations must happen server-side. The client should only send product identifiers and quantity. The backend must re-fetch authoritative price from database or pricing service.”
+🔥 Threat: Price tampering (business logic)
+Why here?
+Backend trusts client-provided price
 
-Follow-up Trick Question
-❓ “But what if pricing is cached on client for performance?”
-Correct answer:
-	“Client caching is fine for display, but pricing must be recalculated and validated during checkout using trusted backend services. Never trust client-provided financial parameters.”
+-> Attack:
+Change:
+price=1000 → price=1
 
-🔴 2. Coupon Abuse
-Attack Patterns
-	• Reusing single-use coupon multiple times
-	• Applying coupon to ineligible product
-	• Combining multiple coupons
-	• Race condition on coupon redemption
-	• Applying coupon after refund
-	• Using expired coupon via time manipulation
+-> Root cause:
+Business rule (pricing) enforced on client
 
-Real Exploit Scenario
-Coupon has limit: 1 use per user.
-Attacker:
-	• Sends 20 parallel requests.
-	• All pass “not used yet” check.
-	• Coupon applied 20 times.
-Race condition.
+-> Mitigation:
+Backend must fetch price from Catalog Service
 
-	“Coupon validation must be atomic. We should implement transactional checks or distributed locking to prevent race conditions. Additionally, coupon usage counters must be updated in the same transaction as order creation.”
-	“At scale, we should treat coupon abuse as fraud problem, not only technical validation. Behavioral monitoring can detect abnormal redemption patterns.”
+🎟️ FLOW 3: COUPON GENERATION
+Step 3: Generate coupon
+POST /coupon/generate
+->Sub-steps:
+Check eligibility:
+. first_purchase == true
+. Create coupon
+. Store in DB
 
-🔴 3. Cart Manipulation
+🔥 Threat: Unlimited coupon generation
+Attack
+Repeat API call 100 times
+
+Why here?
+Eligibility not enforced atomically
+
+-> Mitigation:
+DB constraint:
+UNIQUE(user_id, coupon_type)
+
+🧾 FLOW 4: APPLY COUPON
+Step 4: Apply coupon
+POST /cart/apply-coupon
+-> Sub-steps:
+. Validate coupon
+. Check unused
+. Apply discount
+
+🔥 Threat: Race condition
 Attack:
-	• Change quantity to negative value
-	• Change quantity to 0
-	• Add product not available
-	• Modify inventory flag
-Example:
-"quantity": -5
-If system calculates:
-Total = price × quantity
-Could result in negative payable amount.
+Send 10 parallel requests
+All pass:
+coupon_unused = true
 
-	“Input validation must enforce logical constraints like quantity > 0 and within inventory limits. Additionally, server must re-validate inventory at checkout to prevent stale cart manipulation.”
+-> Root cause:
+Check + update not atomic
 
-🔴 4. Race Conditions in Checkout (VERY IMPORTANT)
-	“How would you secure a checkout system?”
-Key risks:
-	• Double spend
-	• Duplicate order placement
-	• Payment replay
-	• Inventory overselling
+-> Mitigation:
+. DB transaction
+. Row-level lock
+. Redis lock
 
-Example Attack
-User clicks “Pay” multiple times.
-If:
-	• Payment API processes twice
-	• Inventory deducted twice
-	• Refund logic flawed
-Financial loss.
+🧮 FLOW 5: CHECKOUT
+Step 5: Checkout
+POST /order/create
+-> Sub-steps:
+. Validate cart
+. Calculate total
+. Create order
 
-	“Checkout APIs must be idempotent. Each order request should carry an idempotency key. Backend must ensure that repeated requests with the same key do not create duplicate transactions.”
-	“Payment confirmation and inventory deduction should occur within a transactional boundary or via reliable message queue with exactly-once semantics.”
+🔥 Threat: Workflow bypass
+Intended flow
+Cart → Apply coupon → Validate → Checkout
 
-🔴 5. Refund Abuse
-Attack patterns:
-	• Claim item not delivered
-	• Manipulate refund eligibility window
-	• Partial refund misuse
-	• Return item but keep product (switching product)
-Technical angle:
-	• Manipulating refund API
-	• Bypassing refund state machine
+-> Attack:
+Directly call:
+POST /order/create
 
-	“Refund flows must enforce strict state transitions. The order lifecycle should be implemented as a state machine, and transitions must be validated server-side to prevent illegal state manipulation.”
+Skipping validations
 
-🔴 6. Gift Card Abuse
-Attack patterns:
-	• Brute-force gift card numbers
-	• Enumerating balance API
-	• Using partial balance multiple times
-	• Race condition draining
+-> Root cause:
+Backend assumes frontend enforces flow
 
-Mitigation
-	• High entropy gift codes
-	• Rate limiting balance checks
-	• Velocity monitoring
-	• CAPTCHA after threshold
-	• Transactional balance deduction
+-> Mitigation:
+Backend must re-validate EVERYTHING
 
-🔴 7. Inventory Scraping & Bots
-Attackers:
-	• Scrape inventory data
-	• Auto-buy limited stock (scalping)
-	• Abuse flash sales
-Mitigation:
-	• Bot detection
-	• Behavioral analytics
-	• Rate limiting
-	• Queue-based purchase system
+💳 FLOW 6: PAYMENT
+Step 6: Payment
+POST /payment/process
+-> Sub-steps:
+. Check order state
+. Call payment gateway
+. Update status
 
-	“In large-scale e-commerce platforms, business logic security requires collaboration between product, engineering, and fraud teams. Not all abuse can be prevented purely via validation; some require anomaly detection and behavioral risk scoring.”
+🔥 Threat: Approval bypass
+Intended
+High-value order → approval required
 
-4️⃣ Architecture-Level Controls
-	“How would you architect defenses?”
-1️⃣ Server-side authoritative calculations
-2️⃣ Strong state machines for order lifecycle
-3️⃣ Idempotency keys for financial APIs
-4️⃣ Distributed locking where necessary
-5️⃣ Fraud detection systems
-6️⃣ Rate limiting & bot detection
-7️⃣ Monitoring abnormal redemption or purchase patterns
+-> Attack:
+Call /payment/process directly
 
+-> Root cause:
+State not enforced
 
-5️⃣ Trick Questions:
-❓ Can business logic vulnerabilities be detected by SAST?
-Correct answer:
-	“Most business logic flaws cannot be detected by static scanners because they depend on workflow manipulation rather than code-level injection patterns.”
+-> Mitigation:
+if order.state != APPROVED:
+    reject
 
-❓ Is rate limiting enough to stop coupon abuse?
-Correct answer:
-	“Rate limiting helps but does not prevent logical flaws such as race conditions or improper validation. Core validation must be implemented transactionally.”
+📄 FLOW 7: DOCUMENT SHARING
+Step 7: Invoice link
+GET /share?doc_id=INV123
 
-❓ How do you prioritize business logic vulnerabilities?
-Strong answer:
-	“I prioritize based on financial impact, exploitability, and abuse likelihood. In e-commerce, vulnerabilities affecting payments, refunds, or coupons receive highest priority.”
+🔥 Threat: Document sharing abuse
+Attack
+Change:
+doc_id=INV124
 
+-> Root cause:
+No ownership check
 
-“In e-commerce security, business logic protection is as important as preventing technical vulnerabilities. The key is enforcing server-side trust boundaries, atomic transactions, and monitoring abnormal financial behavior at scale.”
+-> Mitigation:
+. Signed URLs
+. ACL validation
+
+🚦 FLOW 8: RATE LIMITING
+Step 8: API calls
+🔥 Threat: Rate-limit bypass
+Attack
+Use:
+- multiple IPs
+- multiple accounts
+- header spoofing
+
+-> Root cause:
+Weak identity binding
+
+Mitigation:-
+Rate limit per:
+user_id + device_id + token
+
+💥 FINAL COMBINED ATTACK CHAIN
+1. Reverse engineer mobile app
+2. Discover hidden APIs
+3. Abuse coupon generation → unlimited coupons
+4. Use race condition → redeem multiple times
+5. Tamper price → reduce cost
+6. Bypass approval → skip checks
+7. Place large discounted orders
+8. Abuse document sharing → access others' invoices
+9. Use role misbinding → trigger refunds
+
+🧠 WHY ALL THIS HAPPENS (CORE INSIGHT)
+Backend trusts:
+- client flow ❌
+- request order ❌
+- non-atomic checks ❌
+- weak identity ❌
+
+🎯 Business logic vulnerabilities occur when systems rely on client behavior, fail to enforce workflows server-side, or do not ensure atomic operations. 
+In an e-commerce system, this leads to abuse such as unlimited coupon generation, workflow bypass, race conditions, and role misbinding. 
+These are mitigated through strict server-side validation, state machine enforcement, strong RBAC, and transactional integrity.
+
+🧠 FINAL MEMORY HOOK
+Client = attacker
+Flow = must be enforced on backend
+Checks = must be atomic
+Roles = must be server-controlled
