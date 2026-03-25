@@ -280,3 +280,149 @@ Client = attacker
 Flow = must be enforced on backend
 Checks = must be atomic
 Roles = must be server-controlled
+
+
+INTERVIEW PREP:
+
+🧩 STEP 0 — YOUR BASE DESIGN (you start here)
+You draw:
+Client → API Gateway → Services:
+   - Auth
+   - Cart
+   - Coupon
+   - Order
+   - Payment
+   - Inventory
+DB + Cache
+
+You say:
+Flow:
+Browse → Add to cart → Apply coupon → Checkout → Payment → Order complete
+
+🧠 Interviewer: “Looks fine. Now I’ll attack it.”
+
+🔥 ROUND 2 — CLIENT IS MALICIOUS
+“Assume attacker fully controls mobile app (API tampering). What breaks?”
+❌ Where BUSINESS LOGIC MISUSE happens
+1. Price Tampering
+POST /cart/add
+{
+ product_id: 123,
+ price: 1   ← attacker changes
+}
+💥 Why it happens
+Client is treated as source of truth
+✅ Your defense
+You say:
+Price is NEVER accepted from client.
+Backend fetches from Catalog Service.
+🎯 Interviewer expects you to say
+“All business-critical values must be computed server-side.”
+
+🔥 ROUND 3 — COUPON ABUSE
+“User can generate coupons. What stops them from generating infinite coupons?”
+❌ BUSINESS LOGIC MISUSE
+POST /coupon/generate
+Attacker loops:
+1000 requests → 1000 coupons
+💥 Why it happens
+Eligibility check is:
+- not enforced strictly
+- or not stored atomically
+✅ Your defense
+You say:
+Enforce:
+UNIQUE(user_id, coupon_type)
+And:
+server-side eligibility check
+
+🔥 Interview push
+“What if attacker uses 10 parallel requests?”
+❌ BUSINESS LOGIC MISUSE (Race Condition)
+All requests see:
+coupon_not_generated = true
+✅ Your fix
+Use DB transaction OR
+INSERT with UNIQUE constraint (atomic)
+
+🔥 ROUND 4 — APPLY COUPON MULTIPLE TIMES
+“Coupon is single-use. Can attacker bypass?”
+❌ BUSINESS LOGIC MISUSE
+POST /apply-coupon
+Attacker sends:
+10 parallel requests
+💥 Why it happens
+Check and update are separate:
+if unused → apply
+✅ Your defense
+Atomic update:
+UPDATE coupon SET used=true WHERE used=false
+
+🔥 ROUND 5 — WORKFLOW BYPASS
+“Can attacker skip steps?”
+Intended flow
+Cart → Coupon → Validation → Checkout → Payment
+❌ BUSINESS LOGIC MISUSE
+Attacker calls:
+POST /payment/process
+Directly.
+💥 Why it happens
+Backend assumes frontend enforces flow
+✅ Your defense
+You say:
+Order has state machine:
+CREATED → VALIDATED → APPROVED → PAID
+Each API checks state
+
+🎯 “Workflow must be enforced server-side using explicit state transitions.”
+
+🔥 ROUND 6 — APPROVAL BYPASS
+“Orders > $10k need approval. Can attacker bypass?”
+❌ BUSINESS LOGIC MISUSE
+POST /payment/process
+Without approval.
+💥 Why
+Payment service does not validate approval state
+✅ Defense
+if order.state != APPROVED:
+    reject
+
+🔥 ROUND 7 — ROLE MISBINDING
+“User vs Admin actions?”
+❌ BUSINESS LOGIC MISUSE
+JWT:
+{ "role": "user" }
+Backend trusts it blindly.
+Attack:
+Call admin APIs directly
+💥 Why
+Authorization not enforced at service level
+✅ Defense
+Fetch role from DB
+Central RBAC enforcement
+
+🔥 ROUND 8 — DOCUMENT SHARING ABUSE
+“Users can share invoices via link. Safe?”
+❌ BUSINESS LOGIC MISUSE
+GET /share?doc_id=INV123
+Attacker:
+doc_id=INV124
+💥 Why
+Access control not enforced at read time
+✅ Defense
+Signed URL:
+HMAC(user_id + doc_id + expiry)
+
+🔥 ROUND 9 — RATE LIMIT BYPASS
+“You added rate limiting. I’ll bypass it.”
+❌ BUSINESS LOGIC MISUSE
+Rate limit = per IP
+Attack:
+Use:
+- multiple IPs
+- multiple accounts
+💥 Why
+Weak identity binding
+✅ Defense
+Rate limit key:
+user_id + device_id + token
