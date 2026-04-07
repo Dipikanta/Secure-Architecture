@@ -109,3 +109,240 @@ MASTER DIAGRAM:
 │   • Physical attacks                                                         │
 │   • Side-channel attacks                                                     │
 └──────────────────────────────────────────────────────────────────────────────┘
+
+🧠 📱 STORY: “A USER BUYS A PRODUCT ON AN ANDROID APP”
+
+We’ll follow:
+User → Android App → OS → Network → Backend
+
+🎬 SCENE 1: USER OPENS THE APP
+Flow:
+User taps app icon
+→ Android launches Activity
+→ App process starts (new UID)
+
+🧩 Component: Activity (Application Layer)
+What it does:
+. Entry point (UI screen)
+. Handles user interaction
+
+🔐 Security happening here:
+App runs in its own sandbox (UID)
+
+👉 Enforced by Linux kernel
+
+💣 Threat: Malicious App tries to launch your Activity
+Q. How?
+-> If your Activity is:
+android:exported="true"
+Another app can do:
+Intent → launch your Activity
+
+Q. Why this is dangerous?
+-> Attacker bypasses your UI flow
+Example:
+. Opens payment screen directly
+. Skips login
+
+🛡️ Mitigation
+-> android:exported="false"
+-> Use explicit intents
+-> Validate all incoming data
+
+🎬 SCENE 2: LOGIN FLOW
+Flow:
+User enters username/password
+→ App sends HTTPS request
+→ Backend returns JWT token
+→ App stores token
+
+🧩 Components involved
+Activity (UI)
+Android Keystore (secure storage)
+Network stack (TLS)
+
+🔐 What SHOULD happen?
+Token stored securely using hardware-backed keystore
+
+💣 Threat: Token Theft
+Q. Where it happens?
+SharedPreferences (plaintext storage)
+
+Q. Why it happens?
+Developer convenience
+
+Q. Attack?
+Rooted device → attacker reads app storage
+Backup extraction → token leak
+
+🛡️ Mitigation
+-> Use EncryptedSharedPreferences
+-> Use hardware-backed keystore
+-> Avoid storing long-lived tokens
+
+🎬 SCENE 3: INTER-APP COMMUNICATION (HIDDEN ENTRY POINT)
+Flow:
+Another app sends Intent → your app
+
+🧩 Component: Intent + Binder IPC
+
+🔐 What Android allows:
+Apps can communicate freely via Intents
+
+💣 Threat: Intent Injection
+Real example
+Intent:
+action=TRANSFER_MONEY
+amount=10000
+
+Attacker app sends this to your app.
+
+Q. Why it works?
+Your app trusts incoming intent blindly
+
+🛡️ Mitigation
+Check:
+- Caller identity (UID)
+- Validate all fields
+- Require permissions
+
+🎬 SCENE 4: PERMISSION SYSTEM (FRAMEWORK LAYER)
+Flow:
+App requests:
+READ_CONTACTS
+ACCESS_LOCATION
+
+🧩 Component: Android Framework
+
+🔐 What it does
+Enforces runtime permissions
+
+💣 Threat: Permission Misuse
+Q. Why it happens?
+User clicks "Allow" without understanding
+
+Q. Attack
+App:
+Reads contacts → sends to server
+
+🛡️ Mitigation:
+-> Request minimal permissions
+-> Explain why permission is needed
+-> Check permission before use
+
+🎬 SCENE 5: CONFUSED DEPUTY (VERY IMPORTANT)
+Flow:
+App A (attacker) → calls your app
+Your app → accesses sensitive resource
+
+🧩 Component: Binder IPC + Framework
+
+💣 Threat: Confused Deputy
+Real scenario
+Your app has:
+READ_SMS permission
+Attacker app:
+→ sends request to your app
+→ your app reads SMS
+→ returns data
+
+Q. Why this happens?
+-> Your app trusts caller
+
+🛡️ Mitigation
+Check:
+Binder.getCallingUid()
+Enforce:
+Caller must have permission too
+
+🎬 SCENE 6: ANDROID RUNTIME (ART)
+Flow:
+App code executes (Java/Kotlin → ART)
+
+🧩 Component: ART
+
+🔐 What it does?
+-> Executes bytecode
+-> Manages memory
+
+💣 Threat: Native Code Exploits
+Q. Where?
+JNI (C/C++ libraries)
+Q. Why?
+No memory safety (buffer overflow)
+
+🛡️ Mitigation
+-> Avoid native code unless necessary
+-> Use safe libraries
+
+🎬 SCENE 7: KERNEL (REAL SECURITY ENFORCER)
+Flow:
+App tries to:
+- access file
+- use camera
+- talk to another app
+
+🧩 Component: Linux Kernel
+
+🔐 What it enforces
+1. App Sandbox
+Each app = unique UID
+2. SELinux
+Strict access rules
+
+💣 Threat: Privilege Escalation
+Q. How?
+Exploit kernel bug → gain root
+Q. Why dangerous?
+Kernel = highest privilege
+
+🛡️ Mitigation
+-> OS updates
+-> SELinux enforcing
+-> Avoid rooted devices (detect root)
+
+🎬 SCENE 8: HARDWARE KEYSTORE (ROOT OF TRUST)
+Flow:
+App stores encryption key
+→ goes to hardware keystore
+
+🧩 Component: TEE / Secure Element
+
+🔐 What it does
+Keys never leave hardware
+
+💣 Threat: Software key extraction
+Q. Why?
+If key stored in app memory → extractable
+
+🛡️ Mitigation
+-> Use hardware-backed keys
+-> Perform crypto inside TEE
+
+🎬 SCENE 9: NETWORK CALL (END-TO-END FLOW)
+Flow:
+App → HTTPS → Backend
+
+🔐 Security
+-> TLS encryption
+-> Certificate validation
+
+💣 Threat: MITM
+Q. How?
+User installs malicious certificate
+Q. Why?
+App trusts system CA store
+
+🛡️ Mitigation
+Certificate pinning
+
+
+🧠 FULL END-TO-END ATTACK CHAIN (REALISTIC)
+1. Attacker installs malicious app
+2. Sends crafted Intent → your exported Activity
+3. Bypasses authentication
+4. Extracts token from insecure storage
+5. Uses MITM to intercept traffic
+6. Exploits backend APIs
+7. If rooted → reads memory / storage
+8. Gains full account access
