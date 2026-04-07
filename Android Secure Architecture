@@ -1,0 +1,111 @@
+MASTER DIAGRAM:
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          👤 USER / ATTACKER                                  │
+│  - Touch input, UI interaction                                               │
+│  - Can install apps, use proxies, root device                                │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │
+                                ▼
+========================= 🔥 TRUST BOUNDARY #1 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        📱 APPLICATION LAYER                                  │
+│                                                                              │
+│  ┌──────────────────────────────┐   ┌─────────────────────────────────────┐  │
+│  │ Your App (APK)               │   │ Other Apps (Untrusted)              │  │
+│  │                              │   │                                     │  │
+│  │ Components:                  │   │ Components:                         │  │
+│  │ - Activities (UI)            │   │ - May call your exported APIs       │  │
+│  │ - Services (background)      │   │                                     │  │
+│  │ - Broadcast Receivers        │   │ Threats:                            │  │
+│  │ - Content Providers          │   │  • Intent abuse                     │  │
+│  │                              │   │  • Data theft                       │  │
+│  │ Storage:                     │   │  • Privilege escalation             │  │
+│  │ - SharedPreferences          │   │                                     │  │
+│  │ - Internal Storage           │   │                                     │  │
+│  │ - SQLite DB                  │   │                                     │  │
+│  │                              │   │                                     │  │
+│  │ Threats:                     │   │                                     │  │
+│  │  • Insecure storage          │   │                                     │  │
+│  │  • Exported components       │   │                                     │  │
+│  │  • Intent injection          │   │                                     │  │
+│  └───────────────┬──────────────┘   └─────────────────────────────────────┘  │
+│                  │ IPC (Binder / Intents)                                   │
+└──────────────────┼──────────────────────────────────────────────────────────┘
+                   ▼
+========================= 🔥 TRUST BOUNDARY #2 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                      🧠 ANDROID FRAMEWORK                                    │
+│                                                                              │
+│  Core Services:                                                              │
+│  - Activity Manager (lifecycle, task isolation)                              │
+│  - Package Manager (install, permissions)                                    │
+│  - Content Resolver (data access control)                                    │
+│  - Window Manager (UI isolation)                                             │
+│  - Notification Manager                                                      │
+│                                                                              │
+│  Security Controls:                                                          │
+│  - Permission Model (runtime permissions)                                    │
+│  - Intent resolution rules                                                   │
+│  - UID-based app isolation                                                   │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Permission misuse                                                        │
+│   • Confused deputy                                                          │
+│   • Intent hijacking                                                         │
+└──────────────────┬──────────────────────────────────────────────────────────┘
+                   │ Binder IPC (kernel-mediated)
+                   ▼
+========================= 🔥 TRUST BOUNDARY #3 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        🧩 ANDROID RUNTIME (ART)                              │
+│  - Executes app bytecode                                                     │
+│  - Memory management (GC)                                                    │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Memory corruption (rare at app level)                                    │
+│   • Code injection (via native libs)                                         │
+└──────────────────┬──────────────────────────────────────────────────────────┘
+                   ▼
+========================= 🔥 TRUST BOUNDARY #4 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          🐧 LINUX KERNEL                                     │
+│                                                                              │
+│  Core Security Model:                                                        │
+│  - Each app runs as separate UID                                             │
+│  - Process isolation                                                         │
+│                                                                              │
+│  Security Modules:                                                           │
+│  - SELinux (Mandatory Access Control)                                        │
+│  - Binder driver (secure IPC)                                                │
+│  - File permissions                                                          │
+│                                                                              │
+│  Hardware Access:                                                            │
+│  - Camera, Mic, Sensors                                                     │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Privilege escalation                                                     │
+│   • Kernel exploits                                                          │
+└──────────────────┬──────────────────────────────────────────────────────────┘
+                   ▼
+========================= 🔥 TRUST BOUNDARY #5 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        🔐 HARDWARE LAYER                                     │
+│                                                                              │
+│  - Trusted Execution Environment (TEE)                                       │
+│  - Secure Element (SE)                                                       │
+│  - Hardware-backed Keystore                                                  │
+│                                                                              │
+│  Responsibilities:                                                           │
+│  - Key storage                                                               │
+│  - Cryptographic operations                                                  │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Physical attacks                                                         │
+│   • Side-channel attacks                                                     │
+└──────────────────────────────────────────────────────────────────────────────┘
