@@ -1,0 +1,234 @@
+Master Diagram:
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          👤 USER / ATTACKER                                  │
+│  - Touch input, installs apps, can jailbreak device                          │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │
+                                ▼
+========================= 🔥 TRUST BOUNDARY #1 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         📱 APPLICATION LAYER                                 │
+│                                                                              │
+│  ┌──────────────────────────────┐   ┌─────────────────────────────────────┐  │
+│  │ Your App (.ipa)              │   │ Other Apps (Sandboxed)              │  │
+│  │                              │   │                                     │  │
+│  │ Components:                  │   │ Threats:                            │  │
+│  │ - UIViewController (UI)      │   │  • URL scheme abuse                 │  │
+│  │ - AppDelegate / SceneDelegate│   │  • Data exfiltration                │  │
+│  │ - Background tasks           │   │  • IPC abuse                        │  │
+│  │                              │   │                                     │  │
+│  │ Storage:                     │   │                                     │  │
+│  │ - Keychain                   │   │                                     │  │
+│  │ - UserDefaults               │   │                                     │  │
+│  │ - Files (App sandbox)        │   │                                     │  │
+│  │                              │   │                                     │  │
+│  │ Threats:                     │   │                                     │  │
+│  │  • Insecure storage          │   │                                     │  │
+│  │  • Deep link abuse           │   │                                     │  │
+│  │  • Sensitive data exposure   │   │                                     │  │
+│  └───────────────┬──────────────┘   └─────────────────────────────────────┘  │
+│                  │ IPC (URL Schemes / XPC)                                  │
+└──────────────────┼──────────────────────────────────────────────────────────┘
+                   ▼
+========================= 🔥 TRUST BOUNDARY #2 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         🧠 iOS FRAMEWORKS                                   │
+│                                                                              │
+│  - UIKit / SwiftUI (UI isolation)                                            │
+│  - Foundation (data handling)                                                │
+│  - Security.framework (crypto, keychain)                                     │
+│  - Core Data / File APIs                                                     │
+│                                                                              │
+│  Security Controls:                                                          │
+│  - Entitlements (capabilities)                                               │
+│  - App sandbox enforcement                                                   │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Entitlement misuse                                                       │
+│   • Deep link hijacking                                                      │
+│   • Improper data handling                                                   │
+└──────────────────┬──────────────────────────────────────────────────────────┘
+                   ▼
+========================= 🔥 TRUST BOUNDARY #3 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        🧩 iOS RUNTIME (Objective-C / Swift)                  │
+│  - ARC memory management                                                     │
+│  - Dynamic runtime (method swizzling)                                        │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Runtime hooking (Frida)                                                  │
+│   • Method swizzling abuse                                                   │
+└──────────────────┬──────────────────────────────────────────────────────────┘
+                   ▼
+========================= 🔥 TRUST BOUNDARY #4 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          🧱 XNU KERNEL                                       │
+│                                                                              │
+│  Core Security:                                                              │
+│  - App Sandbox (mandatory)                                                   │
+│  - Code Signing enforcement                                                  │
+│  - Seatbelt sandbox profiles                                                 │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Kernel exploits                                                          │
+│   • Sandbox escape                                                           │
+└──────────────────┬──────────────────────────────────────────────────────────┘
+                   ▼
+========================= 🔥 TRUST BOUNDARY #5 ================================
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        🔐 HARDWARE SECURITY                                  │
+│                                                                              │
+│  - Secure Enclave                                                            │
+│  - AES engine (hardware crypto)                                              │
+│  - Boot ROM (chain of trust)                                                 │
+│                                                                              │
+│  Responsibilities:                                                           │
+│  - Key generation/storage                                                    │
+│  - Biometric auth (Face ID / Touch ID)                                       │
+│                                                                              │
+│  Threats:                                                                    │
+│   • Physical attacks                                                         │
+│   • Side-channel attacks                                                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+🎬 STORY: “USER LOGS INTO A BANKING APP ON iOS”
+
+We go step-by-step, like real life.
+
+🎬 SCENE 1: APP LAUNCH
+Flow
+User taps app icon
+→ iOS verifies code signature
+→ App process starts inside sandbox
+🧩 Component: Code Signing + Sandbox
+🔐 What happens
+Only Apple-signed apps can run
+App gets isolated container
+💣 Threat: Jailbroken Device
+Why
+Code signing enforcement can be bypassed
+Impact
+Run modified app
+Inject malicious code
+🛡️ Mitigation
+- Jailbreak detection
+- Runtime integrity checks
+🎬 SCENE 2: LOGIN FLOW
+Flow
+User enters credentials
+→ App calls backend (HTTPS)
+→ Token received
+→ Stored in Keychain
+🧩 Component: Keychain
+🔐 What it does
+Encrypted storage tied to device + Secure Enclave
+💣 Threat: Insecure Storage
+Bad practice
+Store token in UserDefaults
+Why risky
+UserDefaults = plaintext
+🛡️ Mitigation
+Use Keychain with:
+kSecAttrAccessibleWhenUnlocked
+🎬 SCENE 3: DEEP LINK ENTRY (CRITICAL ATTACK SURFACE)
+Flow
+bankapp://transfer?amount=10000
+🧩 Component: URL Schemes / Universal Links
+💣 Threat: Deep Link Hijacking
+Attack
+Malicious app registers same scheme
+Why
+iOS picks one app (not guaranteed yours)
+🛡️ Mitigation
+Use Universal Links (domain verified)
+Validate parameters server-side
+🎬 SCENE 4: INTER-PROCESS COMMUNICATION
+Flow
+App A → App B (via URL / XPC)
+🧩 Component: XPC / URL schemes
+💣 Threat: Data Injection
+Attack
+Attacker sends crafted data
+Why
+App trusts incoming data
+🛡️ Mitigation
+Validate ALL inputs
+Authenticate requests
+🎬 SCENE 5: RUNTIME (DYNAMIC NATURE OF iOS)
+Flow
+App executes Swift/Obj-C code
+🧩 Component: Objective-C Runtime
+💣 Threat: Method Swizzling / Hooking
+Attack
+
+Using tools like:
+
+Frida / Cycript
+
+Attacker modifies:
+
+isUserLoggedIn() → always true
+Why
+Runtime is dynamic
+🛡️ Mitigation
+- Runtime integrity checks
+- Detect hooking frameworks
+🎬 SCENE 6: NETWORK COMMUNICATION
+Flow
+App → HTTPS → Backend
+🔐 Security
+TLS encryption
+💣 Threat: MITM
+Attack
+Install rogue certificate
+Intercept traffic
+Why
+System trusts installed CAs
+🛡️ Mitigation
+Certificate pinning
+🎬 SCENE 7: KERNEL ENFORCEMENT
+🧩 Component: XNU Kernel
+🔐 What it enforces
+- Sandbox
+- Code signing
+- Memory protection
+💣 Threat: Kernel Exploit
+Why
+Kernel has highest privileges
+🛡️ Mitigation
+OS updates
+Exploit mitigations (ASLR, DEP)
+🎬 SCENE 8: SECURE ENCLAVE (ROOT OF TRUST)
+🧩 Component: Secure Enclave
+🔐 What it does
+Stores cryptographic keys
+Performs biometric auth
+💣 Threat
+
+Very hard → physical attack
+
+🛡️ Mitigation
+Use Secure Enclave-backed keys
+💥 FULL REAL-WORLD ATTACK CHAIN
+1. Attacker installs malicious app
+2. Exploits deep link → triggers sensitive action
+3. Hooks runtime (Frida)
+4. Bypasses authentication checks
+5. Extracts token from insecure storage
+6. Performs MITM attack
+7. Calls backend APIs as victim
+🧠 KEY DIFFERENCE vs ANDROID
+iOS is stricter by design
+- Mandatory sandbox
+- Strong code signing
+- Limited IPC
+BUT still vulnerable at app layer
+- Deep links
+- Storage
+- Runtime hooking
