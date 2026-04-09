@@ -198,39 +198,51 @@ Ans: Because Runtime is dynamic
 🎬 SCENE 6: NETWORK COMMUNICATION
 Flow:
 App → HTTPS → Backend
+
 🔐 Security
 TLS encryption
+
 💣 Threat: MITM
-Attack
-Install rogue certificate
-Intercept traffic
-Why
-System trusts installed CAs
+Attack:
+-> Install rogue certificate
+-> Intercept traffic
+Q. Why?
+-> System trusts installed CAs
+
 🛡️ Mitigation
 Certificate pinning
+
 🎬 SCENE 7: KERNEL ENFORCEMENT
 🧩 Component: XNU Kernel
+
 🔐 What it enforces
 - Sandbox
 - Code signing
 - Memory protection
-💣 Threat: Kernel Exploit
-Why
-Kernel has highest privileges
-🛡️ Mitigation
-OS updates
-Exploit mitigations (ASLR, DEP)
-🎬 SCENE 8: SECURE ENCLAVE (ROOT OF TRUST)
-🧩 Component: Secure Enclave
-🔐 What it does
-Stores cryptographic keys
-Performs biometric auth
-💣 Threat
 
+💣 Threat: Kernel Exploit
+Q. Why?
+-> Kernel has highest privileges
+
+🛡️ Mitigation
+-> OS updates
+-> Exploit mitigations (ASLR, DEP)
+
+🎬 SCENE 8: SECURE ENCLAVE (ROOT OF TRUST)
+
+🧩 Component: Secure Enclave
+
+🔐 What it does
+-> Stores cryptographic keys
+-> Performs biometric auth
+
+💣 Threat
 Very hard → physical attack
 
 🛡️ Mitigation
 Use Secure Enclave-backed keys
+
+
 💥 FULL REAL-WORLD ATTACK CHAIN
 1. Attacker installs malicious app
 2. Exploits deep link → triggers sensitive action
