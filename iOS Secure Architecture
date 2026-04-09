@@ -102,85 +102,101 @@ Master Diagram:
 We go step-by-step, like real life.
 
 🎬 SCENE 1: APP LAUNCH
-Flow
+Flow:
 User taps app icon
 → iOS verifies code signature
 → App process starts inside sandbox
+
 🧩 Component: Code Signing + Sandbox
-🔐 What happens
-Only Apple-signed apps can run
-App gets isolated container
+
+🔐 What happens?
+-> Only Apple-signed apps can run
+-> App gets isolated container
+
 💣 Threat: Jailbroken Device
-Why
-Code signing enforcement can be bypassed
-Impact
-Run modified app
-Inject malicious code
+Q. Why?
+-> Code signing enforcement can be bypassed
+Q. Impact?
+-> Run modified app
+-> Inject malicious code
+
 🛡️ Mitigation
 - Jailbreak detection
 - Runtime integrity checks
+
 🎬 SCENE 2: LOGIN FLOW
-Flow
+Flow:
 User enters credentials
 → App calls backend (HTTPS)
 → Token received
 → Stored in Keychain
+
 🧩 Component: Keychain
-🔐 What it does
+🔐 What it does?
 Encrypted storage tied to device + Secure Enclave
+
 💣 Threat: Insecure Storage
-Bad practice
+-> Bad practice:
 Store token in UserDefaults
-Why risky
+Because
 UserDefaults = plaintext
+
 🛡️ Mitigation
 Use Keychain with:
 kSecAttrAccessibleWhenUnlocked
+
 🎬 SCENE 3: DEEP LINK ENTRY (CRITICAL ATTACK SURFACE)
-Flow
+Flow:
 bankapp://transfer?amount=10000
+
 🧩 Component: URL Schemes / Universal Links
+
 💣 Threat: Deep Link Hijacking
-Attack
+Attack:
 Malicious app registers same scheme
-Why
-iOS picks one app (not guaranteed yours)
+Q. Why Dangerous?
+-> Because iOS picks one app (not guaranteed yours)
+
 🛡️ Mitigation
-Use Universal Links (domain verified)
-Validate parameters server-side
+-> Use Universal Links (domain verified)
+-> Validate parameters server-side
+
 🎬 SCENE 4: INTER-PROCESS COMMUNICATION
-Flow
+Flow:
 App A → App B (via URL / XPC)
+
 🧩 Component: XPC / URL schemes
+
 💣 Threat: Data Injection
-Attack
+Attack:
 Attacker sends crafted data
-Why
-App trusts incoming data
+Q. Why Dangerous?
+-> App trusts incoming data
+
 🛡️ Mitigation
-Validate ALL inputs
-Authenticate requests
+-> Validate ALL inputs
+-> Authenticate requests
+
 🎬 SCENE 5: RUNTIME (DYNAMIC NATURE OF iOS)
-Flow
+Flow:
 App executes Swift/Obj-C code
+
 🧩 Component: Objective-C Runtime
+
 💣 Threat: Method Swizzling / Hooking
-Attack
-
-Using tools like:
-
-Frida / Cycript
-
+Attack:
+Using tools like: Frida / Cycript
 Attacker modifies:
-
 isUserLoggedIn() → always true
-Why
-Runtime is dynamic
+Q. Why it is possible?
+Ans: Because Runtime is dynamic
+
 🛡️ Mitigation
 - Runtime integrity checks
 - Detect hooking frameworks
+
 🎬 SCENE 6: NETWORK COMMUNICATION
-Flow
+Flow:
 App → HTTPS → Backend
 🔐 Security
 TLS encryption
@@ -223,6 +239,8 @@ Use Secure Enclave-backed keys
 5. Extracts token from insecure storage
 6. Performs MITM attack
 7. Calls backend APIs as victim
+
+
 🧠 KEY DIFFERENCE vs ANDROID
 iOS is stricter by design
 - Mandatory sandbox
