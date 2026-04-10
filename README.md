@@ -193,8 +193,9 @@ Covers:
 • Registry access control
 • Auditability
 
+---
 
-👩‍💻 Maintained By
+## 👩‍💻Maintained By
 Dipikanta Dutta
 Senior Product Security Engineer
-CISSP | Cloud Security | AI Security | Secure Architecture
+CISSP | GCP
