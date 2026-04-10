@@ -1,4 +1,5 @@
-You join an Org and during a review you notice:
+Problem Statement : 
+You join an Org and during a review, you notice:
 Several microservices running on EKS
 Developers have broad IAM roles
 Some services can access multiple S3 buckets
@@ -133,7 +134,7 @@ If attacker steals token:
 Containment + detection = strong answer.
 
 
-🎯 The Perfect Answer:
+🎯 The Answer:
 	“I would prevent lateral movement through defense-in-depth across identity, network, and runtime layers.
 	At the identity layer, each workload uses a dedicated IAM role via IRSA with strict least privilege and no shared roles. This limits AWS resource access if a pod is compromised.
 	At the network layer, I enforce Kubernetes Network Policies and restrict pod-to-pod and egress communication to prevent east-west movement.
