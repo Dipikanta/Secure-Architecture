@@ -4,11 +4,10 @@ Covers:
 	• HSM-backed KMS
 	• Key rotation
 	• Key deletion lifecycle
-  • Data residency compliance
+    • Data residency compliance
 
 🏢 Real-world use case:
 Multi-tenant SaaS Healthcare Platform:
-
 Think of a company building:
 Cloud-based Electronic Health Records (EHR) system
 
@@ -49,7 +48,7 @@ Data:
                                               │
                                               ▼
                                        Encrypted Storage
-🔑 Core design choices
+🔑 Core design choices:
 1. Envelope Encryption
 Data encrypted with DEK (Data Encryption Key)
 DEK encrypted with KEK (KMS key)
@@ -58,8 +57,8 @@ Each tenant → separate KEK in KMS
 3. HSM-backed KMS
 
 Cloud KMS (like AWS KMS / GCP KMS) backed by:
-Hardware Security Modules (HSMs)
-Keys never leave secure boundary.
+-> Hardware Security Modules (HSMs)
+-> Keys never leave secure boundary.
 
 🔄 FULL FLOW (this is what interviewers want)
 🔐 FLOW 1: Data Encryption (Write Path)
@@ -271,7 +270,7 @@ Access to DEK → runtime risk
 Access to KEK → catastrophic risk
 Access to KMS → system-wide risk
 
-🎯 One perfect interview answer
+🎯 One perfect answer
 In a multi-tenant cloud system, we use envelope encryption with per-tenant KEKs stored in an HSM-backed KMS. Data is encrypted using DEKs, which are wrapped by tenant-specific KEKs. 
 This ensures strong isolation, scalable encryption, and enables secure key rotation and deletion. Risks primarily arise at trust boundaries such as backend access to KMS and DEK exposure in memory, 
 which are mitigated through strict IAM controls, secure memory handling, and audit monitoring.
