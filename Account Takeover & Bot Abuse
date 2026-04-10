@@ -1,8 +1,9 @@
 1️⃣ Explain Account Takeover and how you secure against it.
-“In an e-commerce system, account takeover is not just unauthorized login. It is a financial fraud vector. Once an attacker controls an account, they can manipulate wallet balance, stored cards, refunds, addresses, loyalty points, and coupon flows. 
+“In an e-commerce system, account takeover is not just unauthorized login. It is a financial fraud vector. 
+Once an attacker controls an account, they can manipulate wallet balance, stored cards, refunds, addresses, loyalty points, and coupon flows. 
 So I treat ATO as both an authentication and fraud problem.”
 
-2️⃣ How ATO Happens
+2️⃣ How ATO Happens?
 🔹 Credential Stuffing
 	• Attackers use breached credential dumps.
 	• Automated bots attempt login across accounts.
@@ -37,7 +38,7 @@ If reset tokens are predictable, not expiring, or reusable, ATO becomes trivial.
 	• Short expiry.
 	• Invalidate after use.
 
-3️⃣ Why Basic Rate Limiting Is Not Enough
+3️⃣ Why Basic Rate Limiting Is Not Enough?
 “Traditional per-IP rate limiting fails because attackers distribute traffic across botnets. Modern attacks use residential proxies and legitimate user agents.”
 “Static CAPTCHA also fails because solving services exist.”
 
@@ -60,31 +61,31 @@ Layer 3: Post-login Behavior
 “I would assign a dynamic risk score per session rather than binary allow/block.”
 
 5️⃣ Prevention Architecture (How You Design It)
-Authentication Hardening
+Authentication Hardening:
 	• Strong password hashing (bcrypt/argon2)
 	• Constant-time comparison
 	• Account lockout with exponential backoff
 	• Progressive delay after failures
 
-Token Strategy
+Token Strategy:
 	• Short-lived access tokens (10–15 min)
 	• Rotating refresh tokens
 	• Refresh token reuse detection
 	• Token binding to device (if possible)
 “If a refresh token is used twice, assume compromise and revoke session family.”
 
-Adaptive MFA
+Adaptive MFA:
 	• Only trigger when risk score high.
 	• Do not prompt on every login (bad UX).
 	• Use device recognition.
 
-Secure Cookie Config
+Secure Cookie Config:
 Set-Cookie:
 HttpOnly
 Secure
 SameSite=Strict
 
-6️⃣ Edge Case Questions
+6️⃣ Edge Case Questions:
 ❓ “How would you handle false positives?”
 Correct answer:
 “I would not permanently lock account on first anomaly.
