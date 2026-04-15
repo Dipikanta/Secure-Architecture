@@ -92,330 +92,194 @@ We’ll follow one commit all the way to production.
 
 
 🎬 SCENE 1: DEVELOPER PUSHES CODE
-
-
-Flow
-
+Flow:
 Developer → git push → repository
-
 
 🧩 Components
 	• Git repo 
 	• Dependency files 
 
-
 🔥 Threat 1: Dependency Confusion
-
-
-What happens
-
+Q. What happens?
 App depends on:
 internal-lib@1.0
 Attacker uploads to public registry:
-
 internal-lib@999.0 (malicious)
 
-
-Why this works
-
+Q. Why this works?
 Package managers prefer higher version
 
-
-Impact
+Q. Impact
 	• Malicious code enters build 
 
-
 🛡️ Mitigation
-
 - Use private registries
 - Pin exact versions
 - Namespace internal packages
 
-
 🔥 Threat 2: Malicious Commit
-
-
-Why
-
+Q. Why?
 Developer account compromised OR insider threat
 
-
 🛡️ Mitigation
-
 - Signed commits
 - Code review enforcement
 
-
 🎬 SCENE 2: CI PIPELINE STARTS
-
-
 Flow
-
 Webhook → CI pipeline triggered
-
 
 🧩 Component: CI Runner
 
-
 🔥 Threat: Build Isolation Failure
-
-
-What happens
-
+Q. What happens?
 Shared runner used by multiple jobs
 Attacker:
-
 Previous job leaves malicious artifact
 Next job consumes it
 
-
-Why
-
+Q. Why?
 No isolation between builds
 
-
 🛡️ Mitigation
-
 - Ephemeral runners
 - Clean environment per build
 
-
 🎬 SCENE 3: DEPENDENCY INSTALL
-
-
-Flow
-
+Flow:
 npm install / pip install
 
-
 🔥 Threat: Supply Chain Attack
-
-
-Example
-
+Example:
 Typosquatting:
 requests → reqeusts
 
-
 🛡️ Mitigation
-
 - Lock files
 - Dependency scanning
 - SBOM tracking
 
-
 🎬 SCENE 4: BUILD ARTIFACT
-
-
-Flow
-
+Flow:
 Source → compiled → Docker image
 
-
 🔥 Threat: Build Tampering
-
-
-How
-
+Q. How?
 CI script modified:
 adds backdoor during build
 
-
-Why
-
+Q. Why?
 Pipeline config is code (YAML)
 
-
 🛡️ Mitigation
-
 - Protect CI configs
 - Restrict who can modify pipeline
 
-
 🎬 SCENE 5: SBOM GENERATION
-
-
-Flow
-
+Flow:
 Generate SBOM → list all dependencies
-
 
 🧩 Component: SBOM (Software Bill of Materials)
 
-
 🔐 Why it exists
-
 Visibility into supply chain
 
-
 🔥 Threat
-
 Unknown vulnerable dependency
 
-
 🛡️ Mitigation
-
 - Continuous SBOM scanning
 - Vulnerability alerts
 
-
 🎬 SCENE 6: ARTIFACT SIGNING
-
-
-Flow
-
+Flow:
 Artifact → signed with private key
-
 
 🧩 Component: Signing system (e.g., Cosign)
 
-
 🔐 What happens
-
 Signature = hash(artifact) signed by private key
 
-
 🔥 Threat: Unsigned Artifact Deployment
-
-
-Why
-
+Q. Why?
 No enforcement of signature verification
 
-
 🛡️ Mitigation
-
 - Enforce signature verification in CD
 
-
 🔥 Threat: Key Theft
-
-
-Where
-
+Q. Where?
 Signing key stored in CI environment
 
-
 🛡️ Mitigation
-
 - Use KMS / HSM
 - Never store keys in plaintext
 
-
 🎬 SCENE 7: ARTIFACT REGISTRY
-
-
-Flow
-
+Flow:
 Push Docker image → registry
 
-
 🔥 Threat: Image Tampering
-
-
-How
-
+Q. How?
 Attacker replaces image
-
-
-Why
-
+Q. Why?
 Registry access weak
 
-
 🛡️ Mitigation
-
 - Immutable tags
 - Signed images only
 
-
 🎬 SCENE 8: CD PIPELINE (DEPLOYMENT)
-
-
-Flow
-
+Flow:
 Pull image → verify signature → deploy
 
-
 🔥 Threat: Skipping Verification
-
-
-Why
-
+Q. Why?
 Performance shortcuts
 
-
 🛡️ Mitigation
-
 - Mandatory signature validation
 
-
 🎬 SCENE 9: RUNTIME (KUBERNETES)
-
-
-Flow
-
+Flow:
 Container runs in cluster
 
-
 🔥 Threat: Runtime Tampering
-
-
-Example
-
+Example:
 Attacker exec into container → modifies binaries
 
-
-Why
-
+Q. Why?
 No runtime integrity checks
 
-
 🛡️ Mitigation
-
 - Read-only filesystem
 - Runtime monitoring
 - Admission controllers
 
-
 🎬 SCENE 10: SECRETS IN PIPELINE (CRITICAL)
-
-
 Where secrets exist
-
 - API keys
 - Signing keys
 - Cloud credentials
 
-
 🔥 Threat: Secret Leakage
-
-
 How
-
 Logs:
 echo $SECRET
 OR:
-
 Malicious dependency reads env vars
 
-
 Why
-
 Secrets exposed as environment variables
 
-
 🛡️ Mitigation
-
 - Secret managers (Vault, KMS)
 - Short-lived tokens
 - Mask secrets in logs
 
 
+
 💣 FULL ATTACK CHAIN (REALISTIC)
-
-
-
 1. Attacker publishes malicious dependency
 2. CI pulls it (dependency confusion)
 3. Malicious code steals CI secrets
